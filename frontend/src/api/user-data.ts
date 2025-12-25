@@ -6,7 +6,11 @@ const MOCK_EXAMS = [
     NgayKham: "2024-03-01T09:00:00Z",
     TrieuChung: "Bỏ ăn, nôn mửa",
     ChanDoan: "Rối loạn tiêu hóa nhẹ",
-    ToaThuoc: "Men tiêu hóa, Vitamin B",
+    // Cập nhật cấu trúc Toa thuốc chi tiết hơn
+    ToaThuoc: [
+      { TenSP: "Men tiêu hóa", SoLuong: 10, CachDung: "Uống sáng chiều" },
+      { TenSP: "Vitamin B", SoLuong: 1, CachDung: "Tiêm bắp" },
+    ],
     DichVu: { TenDV: "Khám Nội Khoa", NhanVienPhuTrach: "BS. Minh" },
   },
   {
@@ -14,7 +18,13 @@ const MOCK_EXAMS = [
     NgayKham: "2024-01-15T15:30:00Z",
     TrieuChung: "Ngứa tai, hay gãi",
     ChanDoan: "Viêm tai ngoài",
-    ToaThuoc: "Thuốc nhỏ tai Dexoryl",
+    ToaThuoc: [
+      {
+        TenSP: "Thuốc nhỏ tai Dexoryl",
+        SoLuong: 1,
+        CachDung: "Nhỏ 2 giọt/lần",
+      },
+    ],
     DichVu: { TenDV: "Khám Da Liễu", NhanVienPhuTrach: "BS. Lan" },
   },
 ];

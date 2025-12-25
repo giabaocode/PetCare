@@ -3,7 +3,7 @@ import { ThuCung } from "../types/schema";
 const MOCK_PETS: ThuCung[] = [
   {
     MaTC: 1,
-    MaKH: "user-01",
+    MaKH: "KH001", // <--- SỬA LẠI KHỚP VỚI AUTH CONTEXT
     TenTC: "Mimi",
     Loai: "Mèo",
     Giong: "Anh Lông Ngắn",
@@ -13,7 +13,7 @@ const MOCK_PETS: ThuCung[] = [
   },
   {
     MaTC: 2,
-    MaKH: "user-01",
+    MaKH: "KH001", // <--- SỬA LẠI KHỚP VỚI AUTH CONTEXT
     TenTC: "Lu",
     Loai: "Chó",
     Giong: "Golden Retriever",
@@ -25,19 +25,19 @@ const MOCK_PETS: ThuCung[] = [
 
 export const petsApi = {
   getAll: async (maKH: string) => {
-    await new Promise((r) => setTimeout(r, 500)); // Delay 0.5s cho giống thật
-    return MOCK_PETS;
+    await new Promise((r) => setTimeout(r, 500));
+    // Logic lọc giả lập: Chỉ trả về pet của KH đang đăng nhập
+    return MOCK_PETS.filter((p) => p.MaKH === maKH);
   },
 
   getOne: async (id: number) => {
     await new Promise((r) => setTimeout(r, 300));
     const pet = MOCK_PETS.find((p) => p.MaTC === Number(id));
-    return pet ? [pet] : [];
+    return pet ? [pet] : []; // API thường trả về mảng dù get 1
   },
 
   create: async (data: any) => {
     console.log("Mock Create Pet:", data);
-    alert("Thêm thú cưng giả lập thành công!");
     return { status: 201 };
   },
 

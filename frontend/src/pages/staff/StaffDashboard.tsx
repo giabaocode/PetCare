@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-// ... (Các import icon giữ nguyên)
 import {
   TrendingUp,
   Users,
@@ -10,29 +9,24 @@ import {
 } from "lucide-react";
 import { SuccessModal } from "../../components/ui/SuccessModal";
 import { useNavigate } from "react-router-dom";
-// IMPORT DATA PROVIDER
-import {
-  getSharedAppointments,
-  getSharedInventory,
-} from "../../utils/dataProvider";
-
-// ... (Giữ nguyên BASE_CHART_DATA)
+import { useAuth } from "../../context/AuthContext";
+import { getSharedInventory } from "../../utils/dataProvider";
+import { dashboardApi } from "../../api/dashboardApi";
 const BASE_CHART_DATA = [
-  { day: "CN", service: 2500000, retail: 1500000 },
-  { day: "T2", service: 1200000, retail: 500000 },
+  { day: "CN", service: 1200000, retail: 500000 },
+  { day: "T2", service: 1500000, retail: 300000 },
   { day: "T3", service: 1800000, retail: 800000 },
-  { day: "T4", service: 1500000, retail: 1200000 },
-  { day: "T5", service: 2500000, retail: 1000000 },
-  { day: "T6", service: 2000000, retail: 1500000 },
-  { day: "T7", service: 3500000, retail: 2500000 },
+  { day: "T4", service: 2200000, retail: 600000 },
+  { day: "T5", service: 1700000, retail: 400000 },
+  { day: "T6", service: 2500000, retail: 900000 },
+  { day: "T7", service: 3000000, retail: 1200000 },
 ];
 
 export const StaffDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [lowStock, setLowStock] = useState<any[]>([]); // Không dùng INITIAL_LOW_STOCK nữa
+  const { profile } = useAuth();
+  const [lowStock, setLowStock] = useState<any[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
-
-  // ... (State chartData, realStats giữ nguyên)
   const [realStats, setRealStats] = useState({
     revenue: 0,
     appointments: 0,
@@ -40,40 +34,24 @@ export const StaffDashboard: React.FC = () => {
   });
   const [chartData, setChartData] = useState<any[]>(BASE_CHART_DATA);
 
-  // 1. TÍNH TOÁN DỮ LIỆU APPOINTMENT (Giữ nguyên logic cũ)
-  const calculateRealData = () => {
-    const appointments = getSharedAppointments();
-    let todayRevenue = 0;
-    let todayAppts = 0;
-    let todayNew = 0;
+  const calculateRealData = async () => {
+    // GỌI API DASHBOARD (Gọn hơn rất nhiều)
+    const stats = await dashboardApi.getStats(
+      profile?.MaCN || "CN01",
+      profile?.Role || "STAFF"
+    );
+    setRealStats(stats);
 
-    if (Array.isArray(appointments)) {
-      appointments.forEach((apt: any) => {
-        if (apt.paymentStatus === "PAID") {
-          const amount = apt.actualAmount ? Number(apt.actualAmount) : 500000;
-          todayRevenue += amount;
-        }
-        if (apt.status !== "CANCELLED") todayAppts++;
-        if (apt.id && apt.id.toString().includes("WALK-IN")) todayNew++;
-      });
-    }
-
-    setRealStats({
-      revenue: todayRevenue,
-      appointments: todayAppts,
-      newPatients: todayNew,
-    });
-
+    // CẬP NHẬT BIỂU ĐỒ
     const currentDayIndex = new Date().getDay();
     const days = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
     const currentDayLabel = days[currentDayIndex];
-
     const updatedChartData = BASE_CHART_DATA.map((d) => {
       if (d.day === currentDayLabel) {
         return {
           ...d,
-          service: todayRevenue > 0 ? todayRevenue * 0.7 : d.service,
-          retail: todayRevenue > 0 ? todayRevenue * 0.3 : d.retail,
+          service: stats.revenue * 0.7,
+          retail: stats.revenue * 0.3,
         };
       }
       return d;
@@ -81,10 +59,8 @@ export const StaffDashboard: React.FC = () => {
     setChartData(updatedChartData);
   };
 
-  // 2. HÀM MỚI: TÍNH TOÁN TỒN KHO THẤP
   const calculateLowStock = () => {
     const inventory = getSharedInventory();
-    // Lọc ra các sản phẩm có stock <= minStock
     const low = inventory.filter((item: any) => {
       const min = item.minStock || 10;
       return item.stock <= min;
@@ -94,35 +70,28 @@ export const StaffDashboard: React.FC = () => {
 
   useEffect(() => {
     calculateRealData();
-    calculateLowStock(); // Gọi ngay lần đầu
-
+    calculateLowStock();
     const handleUpdate = () => {
       calculateRealData();
-      calculateLowStock(); // Gọi khi có update
+      calculateLowStock();
     };
-
     window.addEventListener("storage", handleUpdate);
     window.addEventListener("local-storage-update", handleUpdate);
-
     return () => {
       window.removeEventListener("storage", handleUpdate);
       window.removeEventListener("local-storage-update", handleUpdate);
     };
-  }, []);
+  }, [profile]);
 
   const handleQuickImport = (id: string) => {
-    // Logic mới: Tăng tồn kho thực tế lên 10 đơn vị
     const inventory = getSharedInventory();
     const updatedInventory = inventory.map((item: any) =>
       item.id === id
         ? { ...item, stock: item.stock + 10, status: "In Stock" }
         : item
     );
-
-    // Lưu lại vào localStorage và bắn sự kiện
     localStorage.setItem("pcx_inventory", JSON.stringify(updatedInventory));
     window.dispatchEvent(new Event("local-storage-update"));
-
     setShowSuccess(true);
   };
 
@@ -133,16 +102,21 @@ export const StaffDashboard: React.FC = () => {
 
   return (
     <div className="pb-10">
-      {/* ... Giữ nguyên phần Header và Cards ... */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
             Tổng quan Chi nhánh
           </h1>
-          <p className="text-slate-500 text-sm">Số liệu kinh doanh hôm nay</p>
+          <p className="text-slate-500 text-sm">
+            {profile?.MaCN === "CN01"
+              ? "PetCare Quận 1"
+              : profile?.MaCN === "CN02"
+              ? "PetCare Quận 7"
+              : "Toàn hệ thống"}{" "}
+            • Số liệu hôm nay
+          </p>
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex justify-between mb-4">
@@ -191,9 +165,7 @@ export const StaffDashboard: React.FC = () => {
           </h3>
         </div>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* ... Giữ nguyên phần Biểu đồ ... */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full">
           <div className="flex justify-between items-center mb-8">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
@@ -228,9 +200,6 @@ export const StaffDashboard: React.FC = () => {
                   className="flex flex-col items-center gap-2 flex-1 group relative cursor-pointer"
                   style={{ height: "100%" }}
                 >
-                  <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs py-1 px-2 rounded pointer-events-none z-10 whitespace-nowrap shadow-lg">
-                    Tổng: {(total / 1000000).toFixed(1)} tr
-                  </div>
                   <div
                     className={`w-full max-w-[40px] h-full flex flex-col justify-end relative rounded-t-lg overflow-hidden bg-slate-50 ${
                       isToday ? "ring-2 ring-blue-300" : ""
@@ -257,8 +226,6 @@ export const StaffDashboard: React.FC = () => {
             })}
           </div>
         </div>
-
-        {/* 3. CẢNH BÁO TỒN KHO (Đã cập nhật logic lấy từ state lowStock) */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
           <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-lg">
             <Package className="w-5 h-5 text-orange-500" /> Sắp hết hàng
@@ -294,7 +261,6 @@ export const StaffDashboard: React.FC = () => {
           </div>
         </div>
       </div>
-
       <SuccessModal
         isOpen={showSuccess}
         onClose={() => setShowSuccess(false)}

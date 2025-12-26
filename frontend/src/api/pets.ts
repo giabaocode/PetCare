@@ -1,50 +1,29 @@
-import { ThuCung } from "../types/schema";
-
-const MOCK_PETS: ThuCung[] = [
-  {
-    MaTC: 1,
-    MaKH: "KH001", // <--- SỬA LẠI KHỚP VỚI AUTH CONTEXT
-    TenTC: "Mimi",
-    Loai: "Mèo",
-    Giong: "Anh Lông Ngắn",
-    NgaySinh: "2022-05-15",
-    GioiTinh: "Cái",
-    TinhTrang: "Khỏe mạnh, đã tiêm phòng dại",
-  },
-  {
-    MaTC: 2,
-    MaKH: "KH001", // <--- SỬA LẠI KHỚP VỚI AUTH CONTEXT
-    TenTC: "Lu",
-    Loai: "Chó",
-    Giong: "Golden Retriever",
-    NgaySinh: "2021-08-20",
-    GioiTinh: "Đực",
-    TinhTrang: "Hơi thừa cân",
-  },
-];
+// src/api/pets.ts
+import { db } from "../utils/dataProvider";
 
 export const petsApi = {
   getAll: async (maKH: string) => {
-    await new Promise((r) => setTimeout(r, 500));
-    // Logic lọc giả lập: Chỉ trả về pet của KH đang đăng nhập
-    return MOCK_PETS.filter((p) => p.MaKH === maKH);
+    // Giả lập delay mạng
+    await new Promise((r) => setTimeout(r, 300));
+    const allPets = db.getPets();
+    // Lọc pet của user hiện tại
+    const userPets = allPets.filter((p: any) => p.MaKH === maKH);
+    return { data: userPets }; // Return structure { data: [] } để khớp code cũ
   },
 
   getOne: async (id: number) => {
-    await new Promise((r) => setTimeout(r, 300));
-    const pet = MOCK_PETS.find((p) => p.MaTC === Number(id));
-    return pet ? [pet] : []; // API thường trả về mảng dù get 1
+    const allPets = db.getPets();
+    const pet = allPets.find((p: any) => Number(p.MaTC) === Number(id));
+    return pet ? [pet] : [];
   },
 
   create: async (data: any) => {
-    console.log("Mock Create Pet:", data);
+    console.log("API: Create Pet", data);
+    db.addPet(data);
     return { status: 201 };
   },
 
-  update: async (id: number, data: any) => {
-    return { status: 200 };
-  },
-  delete: async (id: number) => {
-    return { status: 200 };
-  },
+  // Các hàm update/delete giữ nguyên mock hoặc implement tương tự
+  update: async () => ({ status: 200 }),
+  delete: async () => ({ status: 200 }),
 };

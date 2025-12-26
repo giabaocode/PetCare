@@ -1,464 +1,334 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, Link } from "react-router-dom";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { petsApi } from "../../api/pets";
+import { useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { servicesApi } from "../../api/services";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import {
-  Stethoscope,
-  Syringe,
-  MapPin,
-  Cat,
-  Dog,
-  Plus,
-  UserPlus,
-  Pill,
-  CheckCircle2,
-} from "lucide-react";
-import { clsx } from "clsx";
 import { SuccessModal } from "../ui/SuccessModal";
-
-const bookingSchema = z.object({
-  maCN: z.string().min(1, "Vui lòng chọn chi nhánh"),
-  serviceType: z.enum(["EXAMINATION", "VACCINATION"]),
-  maTC: z.string().min(1, "Vui lòng chọn thú cưng"),
-  dateTime: z.string().min(1, "Vui lòng chọn thời gian"),
-  trieuChung: z.string().optional(),
-  maNVPhuTrach: z.string().optional(),
-  maVaccine: z.string().optional(),
-});
-
-type BookingForm = z.infer<typeof bookingSchema>;
-
-// Mock Data
-const MOCK_DOCTORS = [
-  { id: "bs-01", name: "BS. Nguyễn Văn A (Nội khoa)" },
-  { id: "bs-02", name: "BS. Trần Thị B (Ngoại khoa)" },
-  { id: "bs-03", name: "BS. Lê Văn C (Chuyên gia)" },
-];
-
-const MOCK_VACCINES = [
-  { id: "101", name: "Vaccine 5 bệnh (Chó)" },
-  { id: "102", name: "Vaccine 7 bệnh (Chó)" },
-  { id: "201", name: "Vaccine 4 bệnh (Mèo)" },
-  { id: "301", name: "Vaccine Dại (Chung)" },
-];
+import { Modal } from "../ui/Modal"; // Import Modal thường để báo lỗi
+import { ArrowRight, ArrowLeft } from "lucide-react";
+import { db } from "../../utils/dataProvider";
 
 export const BookingWizard: React.FC = () => {
-  const [step, setStep] = useState(1);
-  const [showSuccess, setShowSuccess] = useState(false); // State cho modal
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const [step, setStep] = useState(1);
 
-  // FIX: SỬ DỤNG petsApi THAY VÌ GỌI AXIOS TRỰC TIẾP
-  const { data: pets = [] } = useQuery({
-    queryKey: ["pets", profile?.MaKH],
-    queryFn: async () => {
-      if (!profile?.MaKH) return [];
-      try {
-        // Gọi hàm mock data chuẩn
-        const res = await petsApi.getAll(profile.MaKH);
-        // Xử lý dữ liệu trả về an toàn
-        return (res as any).data || res || [];
-      } catch (e) {
-        console.error("Lỗi lấy pets:", e);
-        return [];
-      }
+  // State Modals
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Form handling
+  const { register, handleSubmit, watch, setValue } = useForm({
+    defaultValues: {
+      maCN: "",
+      serviceType: "EXAMINATION",
+      maTC: "",
+      dateTime: "",
+      trieuChung: "",
+      maNVPhuTrach: "",
+      maVaccine: "",
     },
-    enabled: !!profile?.MaKH,
   });
 
-  const { data: branches } = useQuery({
-    queryKey: ["branches"],
-    queryFn: servicesApi.getBranches,
-  });
+  // Watchers
+  const selectedBranch = watch("maCN");
+  const selectedService = watch("serviceType");
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    trigger,
-    formState: { errors },
-  } = useForm<BookingForm>({
-    resolver: zodResolver(bookingSchema),
-    defaultValues: { serviceType: "EXAMINATION" },
-  });
+  // State dữ liệu động
+  const [availableDoctors, setAvailableDoctors] = useState<any[]>([]);
+  const [availableVaccines, setAvailableVaccines] = useState<any[]>([]);
+  const [myPets, setMyPets] = useState<any[]>([]);
 
-  const formValues = watch();
+  useEffect(() => {
+    const inventory = db.getInventory();
+    const vaccines = inventory.filter(
+      (i: any) => i.category === "Vaccine" && i.stock > 0
+    );
+    setAvailableVaccines(vaccines);
+  }, []);
+
+  useEffect(() => {
+    if (profile?.MaKH) {
+      const allPets = db.getPets();
+      setMyPets(allPets.filter((p: any) => p.MaKH === profile.MaKH));
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (selectedBranch) {
+      const allUsers = db.getUsers();
+      const doctors = allUsers.filter(
+        (u: any) => u.Role === "DOCTOR" && u.MaCN === selectedBranch
+      );
+      setAvailableDoctors(doctors);
+      setValue("maNVPhuTrach", "");
+    } else {
+      setAvailableDoctors([]);
+    }
+  }, [selectedBranch, setValue]);
 
   const mutation = useMutation({
-    mutationFn: async (d: BookingForm) => {
-      const dichVu = await servicesApi.createDichVu({
-        TenDV: d.serviceType === "EXAMINATION" ? "Khám bệnh" : "Tiêm phòng",
-        MaTC: parseInt(d.maTC),
-        MoTa: d.trieuChung,
-        NhanVienPhuTrach: d.maNVPhuTrach || undefined,
-      });
-
-      if (d.serviceType === "EXAMINATION") {
-        await servicesApi.createKhamBenh({
-          MaDV: dichVu.MaDV,
-          NgayKham: new Date(d.dateTime).toISOString(),
-          TrieuChung: d.trieuChung || "",
-        });
-      } else {
-        await servicesApi.createTiemPhong({
-          MaDV: dichVu.MaDV,
-          MaTC: parseInt(d.maTC),
-          NgayTiem: new Date(d.dateTime).toISOString(),
-          MaVaccine: d.maVaccine ? parseInt(d.maVaccine) : undefined,
-        });
+    mutationFn: async (d: any) => {
+      let symptomText = d.trieuChung;
+      if (d.serviceType === "VACCINATION" && d.maVaccine) {
+        const v = availableVaccines.find((vac) => vac.id === d.maVaccine);
+        symptomText = `Tiêm phòng: ${v?.name || d.maVaccine}`;
       }
-    },
-    onSuccess: () => {
-      // Invalidate để cập nhật lịch sử khám ngay lập tức
-      queryClient.invalidateQueries({ queryKey: ["exams"] });
-      queryClient.invalidateQueries({ queryKey: ["vaccines"] });
 
-      setShowSuccess(true); // <-- THÊM DÒNG NÀY      navigate("/dashboard");
+      await servicesApi.createBookingFull({
+        ...d,
+        trieuChung: symptomText,
+        MaKH: profile?.MaKH,
+      });
     },
-    onError: (err: any) => alert("Lỗi: " + err.message),
+    onSuccess: () => setShowSuccess(true),
+    onError: (err: any) => {
+      // Bật Modal Lỗi thay vì alert
+      setErrorMsg(err.message || "Có lỗi xảy ra khi đặt lịch");
+    },
   });
 
-  const handleNextStep = async () => {
-    const valid = await trigger(["serviceType", "maCN"]);
-    if (valid) setStep(2);
-  };
+  const branches = [
+    { id: "CN01", name: "PetCare Quận 1 (Chính)" },
+    { id: "CN02", name: "PetCare Quận 7" },
+  ];
 
   return (
-    <div className="max-w-3xl mx-auto py-6">
-      {/* Steps Indicator */}
-      <div className="flex items-center justify-center mb-10">
-        <div className="flex items-center w-full max-w-md relative">
-          <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -z-10 rounded-full"></div>
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-2xl shadow-sm border border-gray-100 my-8">
+      <div className="mb-8 text-center">
+        <h2 className="text-2xl font-bold text-gray-800">Đặt lịch khám</h2>
+        <p className="text-gray-500">
+          Bước {step}/2: {step === 1 ? "Thông tin dịch vụ" : "Xác nhận"}
+        </p>
+        <div className="flex gap-2 justify-center mt-4">
           <div
-            className={`absolute top-1/2 left-0 h-1 bg-primary -z-10 rounded-full transition-all duration-500 ${
-              step === 1 ? "w-0" : "w-full"
+            className={`h-2 w-12 rounded-full transition-all ${
+              step >= 1 ? "bg-primary" : "bg-gray-200"
             }`}
           ></div>
-
-          <div className="flex justify-between w-full">
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className={clsx(
-                  "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all border-4",
-                  step >= 1
-                    ? "bg-primary text-white border-primary/30"
-                    : "bg-white text-gray-400 border-gray-200"
-                )}
-              >
-                1
-              </div>
-              <span className="text-xs font-bold text-gray-700">Dịch vụ</span>
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className={clsx(
-                  "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all border-4",
-                  step >= 2
-                    ? "bg-primary text-white border-primary/30"
-                    : "bg-white text-gray-400 border-gray-200"
-                )}
-              >
-                2
-              </div>
-              <span className="text-xs font-bold text-gray-700">Chi tiết</span>
-            </div>
-          </div>
+          <div
+            className={`h-2 w-12 rounded-full transition-all ${
+              step >= 2 ? "bg-primary" : "bg-gray-200"
+            }`}
+          ></div>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="bg-gray-50/50 p-6 border-b border-gray-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-heading font-bold text-gray-900">
-              {step === 1
-                ? "Bước 1: Chọn Dịch vụ"
-                : "Bước 2: Hoàn tất thông tin"}
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">
-              Điền đầy đủ thông tin để bác sĩ chuẩn bị tốt nhất
-            </p>
-          </div>
-        </div>
-
-        <form
-          onSubmit={handleSubmit((d) => mutation.mutate(d))}
-          className="p-6 md:p-8"
-        >
-          {step === 1 && (
-            <div className="space-y-8 animate-fade-in-up">
-              {/* Service Type Selection */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-4">
-                  Bạn cần dịch vụ gì?
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div
-                    onClick={() => setValue("serviceType", "EXAMINATION")}
-                    className={clsx(
-                      "cursor-pointer p-6 rounded-2xl border-2 transition-all hover:shadow-lg relative overflow-hidden",
-                      formValues.serviceType === "EXAMINATION"
-                        ? "border-primary bg-primary/5"
-                        : "border-gray-100 hover:border-primary/30"
-                    )}
-                  >
-                    {formValues.serviceType === "EXAMINATION" && (
-                      <div className="absolute top-4 right-4 text-primary">
-                        <CheckCircle2 className="w-6 h-6 fill-primary/10" />
-                      </div>
-                    )}
-                    <div
-                      className={clsx(
-                        "w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors",
-                        formValues.serviceType === "EXAMINATION"
-                          ? "bg-primary text-white"
-                          : "bg-gray-100 text-gray-400"
-                      )}
-                    >
-                      <Stethoscope className="w-7 h-7" />
-                    </div>
-                    <div className="font-bold text-lg text-gray-800">
-                      Khám bệnh
-                    </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      Chẩn đoán, kê đơn, điều trị nội trú
-                    </div>
-                  </div>
-
-                  <div
-                    onClick={() => setValue("serviceType", "VACCINATION")}
-                    className={clsx(
-                      "cursor-pointer p-6 rounded-2xl border-2 transition-all hover:shadow-lg relative overflow-hidden",
-                      formValues.serviceType === "VACCINATION"
-                        ? "border-secondary bg-secondary/5"
-                        : "border-gray-100 hover:border-secondary/30"
-                    )}
-                  >
-                    {formValues.serviceType === "VACCINATION" && (
-                      <div className="absolute top-4 right-4 text-secondary">
-                        <CheckCircle2 className="w-6 h-6 fill-secondary/10" />
-                      </div>
-                    )}
-                    <div
-                      className={clsx(
-                        "w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors",
-                        formValues.serviceType === "VACCINATION"
-                          ? "bg-secondary text-white"
-                          : "bg-gray-100 text-gray-400"
-                      )}
-                    >
-                      <Syringe className="w-7 h-7" />
-                    </div>
-                    <div className="font-bold text-lg text-gray-800">
-                      Tiêm phòng
-                    </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      Vaccine đơn lẻ hoặc theo gói
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Branch Selection */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Chọn Chi nhánh
-                </label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3.5 text-gray-400 w-5 h-5 pointer-events-none" />
-                  <select
-                    {...register("maCN")}
-                    className="w-full h-12 pl-10 pr-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-white transition-all appearance-none"
-                  >
-                    <option value="">-- Chọn chi nhánh gần bạn --</option>
-                    {branches?.data?.map((b: any) => (
-                      <option key={b.MaCN} value={b.MaCN}>
-                        {b.TenCN} - {b.DiaChi}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {errors.maCN && (
-                  <p className="text-red-500 text-xs mt-1 font-medium">
-                    {errors.maCN.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button
-                  type="button"
-                  onClick={handleNextStep}
-                  size="lg"
-                  className="w-full md:w-auto"
-                >
-                  Tiếp tục
-                </Button>
-              </div>
+      <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+        {step === 1 && (
+          <div className="space-y-5 animate-fade-in">
+            {/* Chọn Chi nhánh */}
+            <div>
+              <label className="block font-medium text-gray-700 mb-2">
+                Chọn Chi nhánh (*)
+              </label>
+              <select
+                {...register("maCN", { required: true })}
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">-- Chọn phòng khám --</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
 
-          {step === 2 && (
-            <div className="space-y-6 animate-fade-in-up">
-              {/* Pet Selection */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-3">
-                  Chọn Thú cưng
-                </label>
-                {!pets || pets.length === 0 ? (
-                  <div className="p-6 border-2 border-dashed border-red-200 bg-red-50 rounded-xl text-center">
-                    <p className="text-red-500 mb-3 font-medium">
-                      Bạn chưa có hồ sơ thú cưng nào!
-                    </p>
-                    {/* Bỏ target="_blank" để tránh lỗi state không cập nhật */}
-                    <Link to="/pets/add">
-                      <Button
-                        variant="outline"
-                        className="bg-white border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Thêm hồ sơ ngay
-                      </Button>
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                    {pets.map((p: any) => (
-                      <div
-                        key={p.MaTC}
-                        onClick={() => setValue("maTC", String(p.MaTC))}
-                        className={clsx(
-                          "flex-shrink-0 w-32 p-4 rounded-xl border-2 cursor-pointer transition-all text-center relative",
-                          formValues.maTC === String(p.MaTC)
-                            ? "border-primary bg-primary/5 shadow-md"
-                            : "border-gray-100 hover:border-gray-300 bg-white"
-                        )}
-                      >
-                        {formValues.maTC === String(p.MaTC) && (
-                          <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full"></div>
-                        )}
-                        <div className="w-12 h-12 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-3 text-2xl">
-                          {p.Loai?.includes("Mèo") ? "🐱" : "🐶"}
-                        </div>
-                        <div className="text-sm font-bold truncate text-gray-800">
-                          {p.TenTC}
-                        </div>
-                        <div className="text-xs text-gray-500">{p.Giong}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {errors.maTC && (
-                  <p className="text-red-500 text-xs mt-1 font-medium">
-                    {errors.maTC.message}
-                  </p>
-                )}
-                <input type="hidden" {...register("maTC")} />
-              </div>
-
-              {/* Time & Doctor/Vaccine */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="Thời gian hẹn"
-                  type="datetime-local"
-                  {...register("dateTime")}
-                  error={errors.dateTime?.message}
-                />
-
-                {formValues.serviceType === "VACCINATION" ? (
-                  <div>
-                    <label className="block text-sm font-medium mb-1 flex items-center text-gray-700">
-                      <Pill className="w-4 h-4 mr-1 text-secondary" /> Loại
-                      Vaccine
-                    </label>
-                    <select
-                      {...register("maVaccine")}
-                      className="w-full h-11 px-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-secondary focus:border-transparent outline-none transition-all"
-                    >
-                      <option value="">-- Chọn loại vaccine --</option>
-                      {MOCK_VACCINES.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-sm font-medium mb-1 flex items-center text-gray-700">
-                      <UserPlus className="w-4 h-4 mr-1 text-primary" /> Bác sĩ
-                      (Tùy chọn)
-                    </label>
-                    <select
-                      {...register("maNVPhuTrach")}
-                      className="w-full h-11 px-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                    >
-                      <option value="">-- Chọn bác sĩ yêu thích --</option>
-                      {MOCK_DOCTORS.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {formValues.serviceType === "EXAMINATION" && (
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700">
-                    Triệu chứng bệnh
-                  </label>
-                  <textarea
-                    {...register("trieuChung")}
-                    className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all h-32 resize-none"
-                    placeholder="Mô tả chi tiết tình trạng của bé..."
-                  ></textarea>
-                  {errors.trieuChung && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {errors.trieuChung.message}
-                    </p>
-                  )}
-                </div>
+            {/* Chọn Bác sĩ */}
+            <div>
+              <label className="block font-medium text-gray-700 mb-2">
+                Bác sĩ phụ trách (Tùy chọn)
+              </label>
+              <select
+                {...register("maNVPhuTrach")}
+                disabled={!selectedBranch}
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">-- Bác sĩ chỉ định --</option>
+                {availableDoctors.map((doc) => (
+                  <option key={doc.MaND} value={doc.HoTen}>
+                    {doc.HoTen}
+                  </option>
+                ))}
+              </select>
+              {!selectedBranch && (
+                <p className="text-xs text-orange-500 mt-1">
+                  Vui lòng chọn chi nhánh trước
+                </p>
               )}
+            </div>
 
-              <div className="flex justify-between pt-6 border-t border-gray-100">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setStep(1)}
+            {/* Chọn Thú cưng */}
+            <div>
+              <label className="block font-medium text-gray-700 mb-2">
+                Chọn Thú cưng (*)
+              </label>
+              <select
+                {...register("maTC", { required: true })}
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">-- Chọn bé --</option>
+                {myPets.map((p) => (
+                  <option key={p.MaTC} value={p.MaTC}>
+                    {p.TenTC} ({p.Loai})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Loại dịch vụ */}
+            <div className="grid grid-cols-2 gap-4">
+              <label
+                className={`p-4 border rounded-xl cursor-pointer text-center transition-all ${
+                  selectedService === "EXAMINATION"
+                    ? "border-primary bg-primary/5 text-primary font-bold"
+                    : "border-gray-200"
+                }`}
+              >
+                <input
+                  type="radio"
+                  value="EXAMINATION"
+                  {...register("serviceType")}
+                  className="hidden"
+                />
+                Khám bệnh
+              </label>
+              <label
+                className={`p-4 border rounded-xl cursor-pointer text-center transition-all ${
+                  selectedService === "VACCINATION"
+                    ? "border-primary bg-primary/5 text-primary font-bold"
+                    : "border-gray-200"
+                }`}
+              >
+                <input
+                  type="radio"
+                  value="VACCINATION"
+                  {...register("serviceType")}
+                  className="hidden"
+                />
+                Tiêm phòng
+              </label>
+            </div>
+
+            {/* Form động */}
+            {selectedService === "EXAMINATION" ? (
+              <div>
+                <label className="block font-medium text-gray-700 mb-2">
+                  Triệu chứng / Ghi chú
+                </label>
+                <textarea
+                  {...register("trieuChung")}
+                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary h-24"
+                  placeholder="VD: Bé bỏ ăn 2 ngày nay..."
+                ></textarea>
+              </div>
+            ) : (
+              <div>
+                <label className="block font-medium text-gray-700 mb-2">
+                  Chọn loại Vaccine (Kho) (*)
+                </label>
+                <select
+                  {...register("maVaccine", { required: true })}
+                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
                 >
-                  Quay lại
-                </Button>
-                <Button
-                  type="submit"
-                  isLoading={mutation.isPending}
-                  size="lg"
-                  className="bg-gradient-to-r from-primary to-primary-600 hover:to-primary-700"
-                >
-                  Xác nhận Đặt lịch
-                </Button>
+                  <option value="">-- Chọn vaccine --</option>
+                  {availableVaccines.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} (Giá: {v.price.toLocaleString()}đ)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="pt-4 flex justify-end">
+              <Button type="button" onClick={() => setStep(2)}>
+                Tiếp tục <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-gray-50 p-6 rounded-xl space-y-3">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Chi nhánh:</span>
+                <span className="font-medium text-gray-900">
+                  {branches.find((b) => b.id === watch("maCN"))?.name}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Bác sĩ:</span>
+                <span className="font-medium text-gray-900">
+                  {watch("maNVPhuTrach") || "Chỉ định sau"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Dịch vụ:</span>
+                <span className="font-medium text-gray-900">
+                  {watch("serviceType") === "EXAMINATION"
+                    ? "Khám bệnh"
+                    : "Tiêm phòng"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Thời gian:</span>
+                <Input
+                  type="datetime-local"
+                  {...register("dateTime", { required: true })}
+                  className="w-auto h-9"
+                />
               </div>
             </div>
-          )}
-        </form>
-      </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setStep(1)}
+                className="flex-1"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại
+              </Button>
+              <Button type="submit" className="flex-[2]">
+                Xác nhận Đặt lịch
+              </Button>
+            </div>
+          </div>
+        )}
+      </form>
+
+      {/* Modal Thành Công */}
       <SuccessModal
         isOpen={showSuccess}
         onClose={() => {
           setShowSuccess(false);
-          navigate("/dashboard"); // Chuyển trang sau khi đóng modal
+          navigate("/dashboard");
         }}
         title="Đặt lịch thành công!"
-        message="Hồ sơ đã được gửi đến chi nhánh. Vui lòng đến đúng giờ nhé!"
+        message="Chúng tôi đã nhận được yêu cầu. Vui lòng đến đúng giờ."
       />
+
+      {/* Modal Báo Lỗi */}
+      <Modal
+        isOpen={!!errorMsg}
+        onClose={() => setErrorMsg(null)}
+        title="Đã có lỗi xảy ra"
+      >
+        <div className="p-4">
+          <p className="text-red-600 mb-4">{errorMsg}</p>
+          <div className="flex justify-end">
+            <Button onClick={() => setErrorMsg(null)} variant="secondary">
+              Đóng
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

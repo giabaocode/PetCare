@@ -1,34 +1,39 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+// FIX: Import đúng file API
 import { invoicesApi } from "../api/invoices";
 import { Button } from "../components/ui/Button";
-import { ArrowLeft, Printer, ShoppingBag, Stethoscope } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Stethoscope } from "lucide-react";
 
+// FIX: Sửa cú pháp export
 export const InvoiceDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Gọi API lấy chi tiết (API này trả về mảng, lấy phần tử đầu tiên)
   const { data: invoiceData, isLoading } = useQuery({
     queryKey: ["invoice", id],
-    queryFn: () => invoicesApi.getOne(Number(id)).then((r) => r.data[0]),
+    queryFn: async () => {
+      // Gọi API getOne mới tạo
+      return await invoicesApi.getOne(Number(id));
+    },
     enabled: !!id,
   });
 
-  if (isLoading)
-    return <div className="p-6 text-center">Đang tải chi tiết...</div>;
+  if (isLoading) return <div className="p-6 text-center">Đang tải...</div>;
   if (!invoiceData)
-    return <div className="p-6 text-center">Không tìm thấy hóa đơn.</div>;
+    return (
+      <div className="p-6 text-center">
+        <p className="mb-4">Không tìm thấy hóa đơn #{id}</p>
+        <Button onClick={() => navigate("/invoices")}>Quay lại</Button>
+      </div>
+    );
 
-  // Supabase trả về nested data dưới dạng property tên bảng
-  // Lưu ý: Tên property phụ thuộc vào cách bạn define relation trong Supabase
-  // Giả định: ChiTietHoaDonSanPham, ChiTietHoaDonDichVu
   const products = invoiceData.ChiTietHoaDonSanPham || [];
   const services = invoiceData.ChiTietHoaDonDichVu || [];
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-3xl mx-auto pb-20">
       <Button
         variant="ghost"
         onClick={() => navigate("/invoices")}
@@ -36,104 +41,82 @@ export const InvoiceDetail: React.FC = () => {
       >
         <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại danh sách
       </Button>
-
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        {/* Header Hóa đơn */}
-        <div className="bg-gray-50 p-6 border-b border-gray-100 flex justify-between items-start">
+        <div className="bg-slate-50 p-6 border-b border-gray-100 flex justify-between">
           <div>
-            <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold">
-              Hóa đơn thanh toán
+            <p className="text-xs font-bold text-slate-400 uppercase">
+              Hóa đơn điện tử
             </p>
-            <h1 className="text-3xl font-bold text-primary mt-1">
+            <h1 className="text-3xl font-bold text-primary">
               #{invoiceData.MaHD}
             </h1>
-            <p className="text-gray-600 mt-2">
-              Ngày lập: {new Date(invoiceData.NgayLap).toLocaleString("vi-VN")}
+            <p className="text-sm text-slate-500 mt-1">
+              Ngày: {new Date(invoiceData.NgayLap).toLocaleString("vi-VN")}
             </p>
           </div>
           <div className="text-right">
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold uppercase">
-              Đã thanh toán
-            </span>
-            <p className="mt-2 text-sm text-gray-500">
+            <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold inline-block mb-2">
+              {invoiceData.TrangThai}
+            </div>
+            <p className="text-sm font-medium">
               {invoiceData.HinhThucThanhToan}
             </p>
           </div>
         </div>
-
-        {/* Nội dung chi tiết */}
-        <div className="p-6 space-y-8">
-          {/* Danh sách Dịch vụ */}
+        <div className="p-6 space-y-6">
           {services.length > 0 && (
             <div>
-              <h3 className="flex items-center font-bold text-gray-800 mb-3 pb-2 border-b">
-                <Stethoscope className="w-4 h-4 mr-2 text-secondary" /> Dịch vụ
-                sử dụng
+              <h3 className="font-bold text-slate-800 mb-3 flex items-center">
+                <Stethoscope className="w-4 h-4 mr-2 text-blue-500" /> Dịch vụ
+                khám
               </h3>
-              <div className="space-y-3">
-                {services.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <div>
-                      {/* Cần join bảng DichVu để lấy tên, hoặc Supabase return nested obj */}
-                      <span className="font-medium text-gray-700">
-                        {item.DichVu?.TenDV || `Dịch vụ #${item.MaDV}`}
-                      </span>
-                      <div className="text-xs text-gray-400">
-                        x{item.SoLuong}
-                      </div>
-                    </div>
-                    <span className="font-medium">
-                      {Number(item.ThanhTien).toLocaleString()} đ
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {services.map((s: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex justify-between text-sm py-2 border-b border-dashed border-gray-100 last:border-0"
+                >
+                  <span>{s.DichVu?.TenDV}</span>
+                  <span className="font-medium">
+                    {Number(s.ThanhTien).toLocaleString()}đ
+                  </span>
+                </div>
+              ))}
             </div>
           )}
-
-          {/* Danh sách Sản phẩm */}
           {products.length > 0 && (
             <div>
-              <h3 className="flex items-center font-bold text-gray-800 mb-3 pb-2 border-b">
-                <ShoppingBag className="w-4 h-4 mr-2 text-blue-500" /> Sản phẩm
-                mua lẻ
+              <h3 className="font-bold text-slate-800 mb-3 flex items-center">
+                <ShoppingBag className="w-4 h-4 mr-2 text-green-500" /> Thuốc &
+                Vật tư
               </h3>
-              <div className="space-y-3">
-                {products.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <div>
-                      <span className="font-medium text-gray-700">
-                        {item.SanPham?.TenSP || `Sản phẩm #${item.MaSP}`}
-                      </span>
-                      <div className="text-xs text-gray-400">
-                        x{item.SoLuong}
-                      </div>
-                    </div>
-                    <span className="font-medium">
-                      {Number(item.ThanhTien).toLocaleString()} đ
+              {products.map((p: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex justify-between text-sm py-2 border-b border-dashed border-gray-100 last:border-0"
+                >
+                  <div>
+                    <span className="text-slate-700">{p.SanPham?.TenSP}</span>
+                    <span className="text-xs text-slate-400 ml-2">
+                      x{p.SoLuong}
                     </span>
                   </div>
-                ))}
-              </div>
+                  <span className="font-medium">
+                    {Number(p.ThanhTien).toLocaleString()}đ
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
-
-        {/* Footer Tổng tiền */}
-        <div className="bg-gray-50 p-6 border-t border-gray-100">
-          <div className="flex justify-between items-center text-lg">
-            <span className="font-bold text-gray-700">Tổng cộng</span>
-            <span className="font-bold text-2xl text-primary">
-              {Number(invoiceData.TongTien).toLocaleString("vi-VN")} đ
-            </span>
-          </div>
-          <div className="mt-6 flex justify-end">
-            <Button variant="outline" onClick={() => window.print()}>
-              <Printer className="w-4 h-4 mr-2" /> In hóa đơn
-            </Button>
-          </div>
+        <div className="bg-slate-50 p-6 border-t border-gray-100 flex justify-between items-center">
+          <span className="font-bold text-lg text-slate-700">
+            Tổng thanh toán
+          </span>
+          <span className="font-bold text-2xl text-primary">
+            {Number(invoiceData.TongTien).toLocaleString()} đ
+          </span>
         </div>
       </div>
     </div>
   );
-}; // Invoice detail
+};

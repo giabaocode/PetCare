@@ -1,6 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import api from "../utils/apiClient";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -9,10 +8,13 @@ import {
   Mail,
   Phone,
   Lock,
-  Calendar,
   CreditCard,
   ShieldCheck,
+  Calendar,
 } from "lucide-react";
+// Import DB & Modal
+import { db } from "../utils/dataProvider";
+import { SuccessModal } from "../components/ui/SuccessModal";
 
 export const Register: React.FC = () => {
   const {
@@ -22,13 +24,27 @@ export const Register: React.FC = () => {
   } = useForm<any>();
   const navigate = useNavigate();
 
+  // State điều khiển Modal
+  const [showSuccess, setShowSuccess] = useState(false);
+
   const onSubmit = async (d: any) => {
     try {
-      await api.post("/auth/register", d);
-      alert("Đăng ký thành công! Vui lòng đăng nhập.");
-      navigate("/login");
+      await new Promise((r) => setTimeout(r, 800));
+
+      db.addUser({
+        HoTen: d.HoTen,
+        Email: d.Email,
+        SDT: d.SDT,
+        MatKhau: d.password,
+        CCCD: d.CCCD,
+        NgaySinh: d.NgaySinh,
+        GioiTinh: d.GioiTinh,
+      });
+
+      // Thay vì alert -> Bật Modal
+      setShowSuccess(true);
     } catch (e: any) {
-      alert(e.response?.data?.message || e.message);
+      alert(e.message); // Có thể thay bằng Error Modal nếu muốn
     }
   };
 
@@ -125,7 +141,7 @@ export const Register: React.FC = () => {
                 </label>
                 <select
                   {...register("GioiTinh")}
-                  className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none h-10 bg-white"
+                  className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none h-11 bg-white"
                 >
                   <option value="Nam">Nam</option>
                   <option value="Nữ">Nữ</option>
@@ -188,6 +204,17 @@ export const Register: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* MODAL THÀNH CÔNG */}
+      <SuccessModal
+        isOpen={showSuccess}
+        onClose={() => {
+          setShowSuccess(false);
+          navigate("/login");
+        }}
+        title="Đăng ký thành công!"
+        message="Tài khoản của bạn đã được tạo. Vui lòng đăng nhập."
+      />
     </div>
   );
 };

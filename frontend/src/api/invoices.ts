@@ -1,45 +1,26 @@
-import { HoaDon } from "../types/schema";
-
-const MOCK_INVOICES: HoaDon[] = [
-  {
-    MaHD: 5001,
-    NgayLap: "2024-03-10T10:30:00Z",
-    TongTien: 1500000,
-    HinhThucThanhToan: "Chuyển khoản",
-    TrangThai: "Đã thanh toán",
-  },
-  {
-    MaHD: 4092,
-    NgayLap: "2024-02-15T14:20:00Z",
-    TongTien: 350000,
-    HinhThucThanhToan: "Tiền mặt",
-    TrangThai: "Đã thanh toán",
-  },
-];
-
-// Chi tiết giả cho Hóa đơn 5001
-const MOCK_DETAIL_5001 = {
-  ...MOCK_INVOICES[0],
-  ChiTietHoaDonSanPham: [
-    {
-      SanPham: { TenSP: "Thức ăn hạt Royal Canin" },
-      SoLuong: 2,
-      ThanhTien: 500000,
-    },
-    { SanPham: { TenSP: "Pate Whiskas" }, SoLuong: 5, ThanhTien: 100000 },
-  ],
-  ChiTietHoaDonDichVu: [
-    { DichVu: { TenDV: "Combo Tắm & Cắt tỉa" }, SoLuong: 1, ThanhTien: 900000 },
-  ],
-};
+import { db } from "../utils/dataProvider";
 
 export const invoicesApi = {
-  getAll: async (maKH: string) => {
-    return { data: MOCK_INVOICES };
+  create: async (invoiceData: any) => {
+    return db.addInvoice(invoiceData);
   },
 
-  getOne: async (id: number) => {
-    // Luôn trả về chi tiết giả dù bấm vào hóa đơn nào (để test UI)
-    return { data: [MOCK_DETAIL_5001] };
+  // FIX: Thêm tham số optional maKH vào đây
+  getAll: async (maKH?: string) => {
+    const allInvoices = db.getInvoices();
+
+    // Nếu có truyền maKH -> Lọc ra hóa đơn của người đó
+    if (maKH) {
+      return allInvoices.filter((inv: any) => inv.MaKH === maKH);
+    }
+
+    // Nếu không truyền (VD: Admin xem) -> Trả về hết
+    return allInvoices;
+  },
+
+  getOne: async (id: number | string) => {
+    const all = db.getInvoices();
+    const invoice = all.find((inv: any) => String(inv.MaHD) === String(id));
+    return invoice || null;
   },
 };

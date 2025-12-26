@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -6,13 +6,15 @@ import { petsApi } from "../api/pets";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
-import { ArrowLeft, PawPrint } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+// Import SuccessModal
+import { SuccessModal } from "../components/ui/SuccessModal";
 
 export const AddPet: React.FC = () => {
   const {
     register,
     handleSubmit,
-    formState: { errors }, // Lấy object errors từ đây
+    formState: { errors },
   } = useForm({
     defaultValues: {
       TenTC: "",
@@ -28,78 +30,64 @@ export const AddPet: React.FC = () => {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
 
+  // State Modal
+  const [showSuccess, setShowSuccess] = useState(false);
+
   const mutation = useMutation({
     mutationFn: (data: any) => petsApi.create({ ...data, MaKH: profile?.MaKH }),
     onSuccess: () => {
-      // Làm mới danh sách pets để khi quay lại Dashboard thấy ngay
       queryClient.invalidateQueries({ queryKey: ["pets"] });
-      alert("Thêm hồ sơ thành công!");
-      navigate("/dashboard");
+      // Bật Modal thay vì alert
+      setShowSuccess(true);
     },
-    onError: (err) => {
-      alert("Có lỗi xảy ra: " + err);
+    onError: (err: any) => {
+      alert("Có lỗi xảy ra: " + err.message);
     },
   });
 
-  const onSubmit = (data: any) => {
-    mutation.mutate(data);
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 p-6 flex justify-center items-center">
-      <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-lg border border-gray-100">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center text-gray-400 hover:text-primary mb-6 transition font-medium"
+    <div className="p-6 max-w-xl mx-auto">
+      <Button
+        variant="ghost"
+        onClick={() => navigate("/dashboard")}
+        className="mb-4 pl-0"
+      >
+        <ArrowLeft className="w-5 h-5 mr-2" /> Quay lại
+      </Button>
+
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">
+          Thêm thú cưng mới
+        </h1>
+
+        <form
+          onSubmit={handleSubmit((d) => mutation.mutate(d))}
+          className="space-y-5"
         >
-          <ArrowLeft className="w-5 h-5 mr-2" /> Quay lại
-        </button>
-
-        <div className="flex items-center gap-3 mb-2">
-          <div className="bg-primary/10 p-3 rounded-full text-primary">
-            <PawPrint className="w-6 h-6" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Thêm thành viên mới
-          </h1>
-        </div>
-        <p className="text-gray-500 mb-8 ml-14">
-          Nhập thông tin để tạo hồ sơ y tế
-        </p>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          {/* Tên Thú Cưng */}
           <Input
             label="Tên thú cưng"
-            placeholder="Ví dụ: Mimi, Lu..."
-            {...register("TenTC", { required: "Tên thú cưng là bắt buộc" })}
+            {...register("TenTC", { required: "Nhập tên bé" })}
             error={errors.TenTC?.message as string}
           />
 
-          {/* Grid: Loài & Giới tính */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Loài
-              </label>
+              <label className="block text-sm font-medium mb-1">Loại</label>
               <select
                 {...register("Loai")}
-                className="flex h-11 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                className="w-full p-2 border border-gray-200 rounded-xl h-11 outline-none"
               >
                 <option value="Chó">Chó</option>
                 <option value="Mèo">Mèo</option>
-                <option value="Chim">Chim</option>
-                <option value="Thỏ">Thỏ</option>
-                <option value="Khác">Khác</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium mb-1">
                 Giới tính
               </label>
               <select
                 {...register("GioiTinh")}
-                className="flex h-11 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                className="w-full p-2 border border-gray-200 rounded-xl h-11 outline-none"
               >
                 <option value="Đực">Đực</option>
                 <option value="Cái">Cái</option>
@@ -107,42 +95,22 @@ export const AddPet: React.FC = () => {
             </div>
           </div>
 
-          {/* Grid: Giống & Ngày sinh */}
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Giống loài"
-              placeholder="VD: Corgi"
-              {...register("Giong", { required: "Vui lòng nhập giống" })}
-              error={errors.Giong?.message as string}
-            />
-
-            <Input
-              label="Ngày sinh"
-              type="date"
-              // HTML5 constraint chặn chọn tương lai trên UI
-              max={new Date().toISOString().split("T")[0]}
-              {...register("NgaySinh", {
-                required: "Vui lòng chọn ngày sinh",
-                // Validate Logic chặn submit nếu hack HTML
-                validate: (value) => {
-                  const selected = new Date(value);
-                  const today = new Date();
-                  // Reset giờ về 0 để so sánh chính xác ngày
-                  today.setHours(0, 0, 0, 0);
-                  return (
-                    selected <= today ||
-                    "Ngày sinh không được lớn hơn hiện tại (RBTV-04)"
-                  );
-                },
-              })}
-              error={errors.NgaySinh?.message as string}
-            />
-          </div>
-
-          {/* Tình trạng */}
           <Input
-            label="Tình trạng sức khỏe ban đầu"
-            placeholder="VD: Khỏe mạnh, dị ứng..."
+            label="Giống loài"
+            {...register("Giong", { required: "Nhập giống" })}
+            error={errors.Giong?.message as string}
+          />
+
+          <Input
+            label="Ngày sinh"
+            type="date"
+            {...register("NgaySinh", { required: "Chọn ngày sinh" })}
+            error={errors.NgaySinh?.message as string}
+          />
+
+          <Input
+            label="Tình trạng sức khỏe"
+            placeholder="VD: Khỏe mạnh"
             {...register("TinhTrang")}
           />
 
@@ -155,6 +123,16 @@ export const AddPet: React.FC = () => {
           </Button>
         </form>
       </div>
+
+      <SuccessModal
+        isOpen={showSuccess}
+        onClose={() => {
+          setShowSuccess(false);
+          navigate("/dashboard");
+        }}
+        title="Tuyệt vời!"
+        message="Đã thêm hồ sơ thú cưng thành công."
+      />
     </div>
   );
 };

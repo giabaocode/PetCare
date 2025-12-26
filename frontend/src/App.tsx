@@ -1,136 +1,117 @@
-import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./context/AuthContext";
-import { MainLayout } from "./layout/MainLayout";
+// src/App.tsx
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
-// Import Pages
+// Layouts
+import { MainLayout } from "./layout/MainLayout";
+import { StaffLayout } from "./layout/StaffLayout";
+
+// Pages - Auth
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
-import { LandingPage } from "./pages/LandingPage";
+
+// Pages - Customer
 import { Dashboard } from "./pages/Dashboard";
+import BookingPage from "./pages/BookingPage"; // Default export
 import { PetList } from "./pages/PetList";
-import { PetDetail } from "./pages/PetDetail";
 import { AddPet } from "./pages/AddPet";
-import BookingPage from "./pages/BookingPage";
-import { Packages } from "./pages/Packages";
-import { PackageDetail } from "./pages/PackageDetail";
+import { PetDetail } from "./pages/PetDetail";
+import { Profile } from "./pages/Profile";
+import { History } from "./pages/History";
 import { Invoices } from "./pages/Invoices";
 import { InvoiceDetail } from "./pages/InvoiceDetail";
-import { History } from "./pages/History";
-import { Profile } from "./pages/Profile";
+import { Packages } from "./pages/Packages";
+import { PackageDetail } from "./pages/PackageDetail";
+import { LandingPage } from "./pages/LandingPage";
 import { Feedback } from "./pages/Feedback";
-import { StaffLayout } from "./layout/StaffLayout";
+
+// Pages - Staff
+import { StaffDashboard } from "./pages/staff/StaffDashboard";
 import { StaffSchedule } from "./pages/staff/StaffSchedule";
 import { ExamPage } from "./pages/staff/ExamPage";
-import { ReceptionDesk } from "./pages/staff/ReceptionDesk"; // Import trang mới
-import { StaffDashboard } from "./pages/staff/StaffDashboard";
+import { ReceptionDesk } from "./pages/staff/ReceptionDesk";
+import { InventoryPage } from "./pages/staff/InventoryPage";
 import { PatientManagement } from "./pages/staff/PatientManagement";
 import { HRManagement } from "./pages/staff/HRManagement";
-import { InventoryPage } from "./pages/staff/InventoryPage";
 
-const Protected = ({ children }: { children: React.ReactNode }) => {
-  const { token, isLoading } = useAuth();
-  if (isLoading)
-    return (
-      <div className="h-screen flex items-center justify-center text-primary font-bold animate-pulse">
-        PetCareX Loading...
-      </div>
-    );
+const queryClient = new QueryClient();
+
+// Route Guard Component
+const ProtectedRoute = ({
+  children,
+  allowedRoles,
+}: {
+  children: JSX.Element;
+  allowedRoles?: string[];
+}) => {
+  const { token, profile, isLoading } = useAuth();
+
+  if (isLoading) return <div>Loading...</div>;
   if (!token) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-};
 
-const PublicOnly = ({ children }: { children: React.ReactNode }) => {
-  const { token, isLoading } = useAuth();
-  if (isLoading) return null;
-  if (token) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
+  if (allowedRoles && profile) {
+    if (!allowedRoles.includes(profile.Role)) {
+      // Nếu Staff cố vào trang Customer hoặc ngược lại
+      if (profile.Role === "CUSTOMER") return <Navigate to="/dashboard" />;
+      return <Navigate to="/staff/dashboard" />;
+    }
+  }
+
+  return children;
 };
 
 export default function App() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route
-        path="/"
-        element={
-          <PublicOnly>
-            <LandingPage />
-          </PublicOnly>
-        }
-      />
-      <Route
-        path="/login"
-        element={
-          <PublicOnly>
-            <Login />
-          </PublicOnly>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <PublicOnly>
-            <Register />
-          </PublicOnly>
-        }
-      />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
-      {/* Protected Routes (Wrapped in MainLayout) */}
+      {/* Customer Routes (MainLayout) */}
       <Route
         element={
-          <Protected>
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
             <MainLayout />
-          </Protected>
+          </ProtectedRoute>
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
-
-        {/* Pets */}
+        <Route path="/booking" element={<BookingPage />} />
         <Route path="/pets" element={<PetList />} />
         <Route path="/pets/add" element={<AddPet />} />
         <Route path="/pets/:id" element={<PetDetail />} />
-
-        {/* Booking */}
-        <Route path="/booking" element={<BookingPage />} />
-
-        {/* Packages */}
-        <Route path="/packages" element={<Packages />} />
-        <Route path="/packages/:id" element={<PackageDetail />} />
-
-        {/* Invoices & History */}
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/history" element={<History />} />
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/invoices/:id" element={<InvoiceDetail />} />
-        <Route path="/history" element={<History />} />
-
-        {/* User */}
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/packages" element={<Packages />} />
+        <Route path="/packages/:id" element={<PackageDetail />} />
         <Route path="/feedback" element={<Feedback />} />
       </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-
+      {/* Staff Routes (StaffLayout) */}
       <Route
         path="/staff"
         element={
-          <Protected>
+          <ProtectedRoute allowedRoles={["ADMIN", "DOCTOR", "RECEPTIONIST"]}>
             <StaffLayout />
-          </Protected>
+          </ProtectedRoute>
         }
       >
-        {/* FIX: Thay thế dòng "Coming Soon" bằng Component thật */}
+        <Route index element={<Navigate to="/staff/dashboard" />} />
         <Route path="dashboard" element={<StaffDashboard />} />
-
-        <Route path="reception" element={<ReceptionDesk />} />
         <Route path="schedule" element={<StaffSchedule />} />
         <Route path="exam/:id" element={<ExamPage />} />
-
-        {/* FIX: Thay thế dòng "Coming Soon" bằng Component thật */}
-        <Route path="patients" element={<PatientManagement />} />
+        <Route path="reception" element={<ReceptionDesk />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="patients" element={<PatientManagement />} />
         <Route path="hr" element={<HRManagement />} />
       </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
 }

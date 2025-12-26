@@ -1,119 +1,252 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { packagesApi } from "../api/packages";
-import { Link } from "react-router-dom";
+// frontend/src/pages/Packages.tsx
+import React, { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button";
-import { Shield, Check, Clock, Zap } from "lucide-react";
-// FIX: Import thêm Interface GoiTiem
-import { GoiTiem } from "../types/schema";
+import { Modal } from "../components/ui/Modal";
+import { SuccessModal } from "../components/ui/SuccessModal";
+import { Shield, Check, Star, Clock } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
+
+// FIX 1: Import đúng đường dẫn file API vừa tạo
+import { packagesApi } from "../api/packages";
+import { usersApi } from "../api/userApi";
+import { invoicesApi } from "../api/invoices";
 
 export const Packages: React.FC = () => {
-  // FIX: Định nghĩa kiểu dữ liệu trả về cho useQuery là GoiTiem[]
-  const { data: packages, isLoading } = useQuery<GoiTiem[]>({
-    queryKey: ["packages"],
-    queryFn: async () => {
-      const res = await packagesApi.getAll();
-      // Đảm bảo trả về mảng data từ Axios response
-      return (res as any).data || res;
-    },
-  });
+  const { profile } = useAuth();
+  const navigate = useNavigate();
 
-  if (isLoading)
-    return (
-      <div className="p-10 text-center text-gray-500">
-        Đang tải gói dịch vụ...
-      </div>
-    );
+  const [selectedPkg, setSelectedPkg] = useState<any>(null);
+  const [selectedPetId, setSelectedPetId] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // FIX 2: Thay db.getPets() bằng State + API Call
+  const [myPets, setMyPets] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPets = async () => {
+      if (profile?.MaKH) {
+        const pets = await usersApi.getMyPets(profile.MaKH);
+        setMyPets(pets);
+      }
+    };
+    fetchPets();
+  }, [profile]);
+
+  const PACKAGES = [
+    {
+      id: "PKG01",
+      name: "Gói Cơ Bản (Mèo)",
+      discount: "-5%",
+      price: 500000,
+      duration: "6 tháng",
+      durationMonth: 6,
+      features: ["Đầy đủ vaccine cơ bản", "Miễn phí 2 lần khám"],
+      icon: <Shield className="w-6 h-6" />,
+      color: "bg-gray-100 text-gray-600",
+      benefits: { freeExamLimit: 2 },
+    },
+    {
+      id: "PKG02",
+      name: "Gói Toàn Diện (Chó)",
+      discount: "-15%",
+      price: 1200000,
+      duration: "12 tháng",
+      durationMonth: 12,
+      features: [
+        "Đầy đủ vaccine cơ bản",
+        "Miễn phí 2 lần khám",
+        "Giảm 10% Spa",
+      ],
+      icon: <Shield className="w-6 h-6" />,
+      color: "bg-green-100 text-green-600",
+      isPopular: true,
+      benefits: { freeExamLimit: 2 },
+    },
+    {
+      id: "PKG03",
+      name: "Gói Sơ Sinh (Baby)",
+      discount: "-10%",
+      price: 800000,
+      duration: "3 tháng",
+      durationMonth: 3,
+      features: [
+        "Đầy đủ vaccine cơ bản",
+        "Miễn phí 2 lần khám",
+        "Tặng sữa tắm",
+      ],
+      icon: <Shield className="w-6 h-6" />,
+      color: "bg-blue-100 text-blue-600",
+      benefits: { freeExamLimit: 2 },
+    },
+  ];
+
+  const handleRegister = async () => {
+    if (!selectedPetId) {
+      alert("Vui lòng chọn thú cưng để áp dụng!");
+      return;
+    }
+
+    // --- FIX LỖI TYPE Ở ĐÂY ---
+    // Kiểm tra kỹ: Nếu chưa có thông tin KH thì không cho chạy tiếp
+    if (!profile?.MaKH) {
+      alert("Vui lòng đăng nhập lại để thực hiện chức năng này!");
+      return;
+    }
+
+    // 1. GỌI API MUA GÓI
+    await packagesApi.buyPackage({
+      MaTC: selectedPetId,
+      MaKH: profile.MaKH, // Lúc này TS đã biết chắc chắn MaKH là string (không bị undefined nữa)
+      Package: selectedPkg,
+    });
+
+    // 2. GỌI API CỘNG ĐIỂM
+    await usersApi.addPoints(profile.MaKH, selectedPkg.price);
+
+    // 3. GỌI API TẠO HÓA ĐƠN
+    await invoicesApi.create({
+      MaHD: Math.floor(200000 + Math.random() * 800000),
+      NgayLap: new Date().toISOString(),
+      TongTien: selectedPkg.price,
+      HinhThucThanhToan: "Ví điện tử",
+      TrangThai: "Đã thanh toán",
+      MaKH: profile.MaKH,
+      MaCN: "CN01",
+      ChiTietHoaDonDichVu: [
+        {
+          DichVu: { TenDV: `Đăng ký: ${selectedPkg.name}` },
+          SoLuong: 1,
+          ThanhTien: selectedPkg.price,
+        },
+      ],
+      ChiTietHoaDonSanPham: [],
+    });
+
+    setSelectedPkg(null);
+    setShowSuccess(true);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Gói Tiêm Chủng Tiết Kiệm
-          </h1>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
-            Bảo vệ thú cưng toàn diện với chi phí tối ưu lên đến 15% so với tiêm
-            lẻ.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* FIX: TypeScript giờ đã hiểu pkg là GoiTiem */}
-          {packages?.map((pkg) => {
-            // Giả lập highlight gói 12 tháng
-            const isPopular = pkg.ThoiHanThang >= 12;
-            return (
-              <div
-                key={pkg.MaGoi}
-                className={`relative flex flex-col bg-white rounded-3xl transition-all duration-300 ${
-                  isPopular
-                    ? "border-2 border-primary shadow-xl scale-105 z-10"
-                    : "border border-gray-100 shadow-lg hover:shadow-xl"
-                }`}
-              >
-                {isPopular && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-secondary to-orange-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-md flex items-center">
-                    <Zap className="w-3 h-3 mr-1 fill-current" /> Phổ biến nhất
-                  </div>
-                )}
-
-                <div className="p-8 flex-1">
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center mb-6 ${
-                      isPopular
-                        ? "bg-primary/10 text-primary"
-                        : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    <Shield className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                    {pkg.TenGoi}
-                  </h3>
-                  <div className="flex items-baseline gap-2 mb-6">
-                    <span className="text-4xl font-extrabold text-gray-900">
-                      -{pkg.PhanTramGiam}%
-                    </span>
-                    <span className="text-gray-500">ưu đãi</span>
-                  </div>
-
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-center text-gray-600">
-                      <Clock className="w-5 h-5 text-primary mr-3" />
-                      <span>
-                        Thời hạn <strong>{pkg.ThoiHanThang} tháng</strong>
-                      </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <Check className="w-5 h-5 text-green-500 mr-3" />
-                      <span>Đầy đủ vaccine cơ bản</span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <Check className="w-5 h-5 text-green-500 mr-3" />
-                      <span>Miễn phí 2 lần khám</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-8 pt-0 mt-auto">
-                  <Link to={`/packages/${pkg.MaGoi}`}>
-                    <Button
-                      className={`w-full py-6 rounded-xl font-bold text-lg ${
-                        isPopular
-                          ? "bg-primary hover:bg-primary-600 shadow-lg shadow-primary/30"
-                          : "bg-gray-900 hover:bg-gray-800"
-                      }`}
-                    >
-                      Đăng ký ngay
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <div className="p-6 max-w-7xl mx-auto pb-20">
+      <div className="text-center mb-12">
+        <h1 className="text-3xl font-bold text-slate-800 mb-4">
+          Gói Tiêm Chủng Tiết Kiệm
+        </h1>
+        <p className="text-slate-500 max-w-2xl mx-auto">
+          Bảo vệ thú cưng toàn diện với chi phí tối ưu.
+        </p>
       </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {PACKAGES.map((pkg) => (
+          <div
+            key={pkg.id}
+            className={`relative bg-white rounded-3xl p-8 border-2 transition-all hover:shadow-xl flex flex-col ${
+              pkg.isPopular
+                ? "border-primary shadow-lg scale-105 z-10"
+                : "border-gray-100"
+            }`}
+          >
+            {pkg.isPopular && (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-orange-500 text-white px-4 py-1 rounded-full text-sm font-bold flex items-center shadow-lg shadow-orange-500/30">
+                <Star className="w-3 h-3 mr-1 fill-white" /> Phổ biến nhất
+              </div>
+            )}
+            <div
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${pkg.color}`}
+            >
+              {pkg.icon}
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">
+              {pkg.name}
+            </h3>
+            <div className="flex items-baseline gap-2 mb-6">
+              <span className="text-3xl font-bold text-slate-900">
+                {pkg.discount}
+              </span>
+              <span className="text-slate-400 font-medium">ưu đãi</span>
+            </div>
+            <div className="space-y-4 mb-8 flex-1">
+              <div className="flex items-center text-sm text-slate-600">
+                <Clock className="w-4 h-4 mr-2 text-primary" />
+                Thời hạn <span className="font-bold ml-1">{pkg.duration}</span>
+              </div>
+              {pkg.features.map((feat, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center text-sm text-slate-600"
+                >
+                  <Check className="w-4 h-4 mr-2 text-green-500" /> {feat}
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 border-t border-gray-100">
+              <p className="text-right text-lg font-bold text-primary mb-4">
+                {pkg.price.toLocaleString()} đ
+              </p>
+              <Button
+                className={`w-full ${
+                  pkg.isPopular ? "shadow-lg shadow-primary/30" : ""
+                }`}
+                onClick={() => setSelectedPkg(pkg)}
+              >
+                Đăng ký ngay
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <Modal
+        isOpen={!!selectedPkg}
+        onClose={() => setSelectedPkg(null)}
+        title="Đăng ký sử dụng"
+      >
+        <div className="space-y-6">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <p className="text-sm text-slate-500 mb-1">Bạn đang chọn:</p>
+            <h3 className="font-bold text-lg text-slate-800">
+              {selectedPkg?.name}
+            </h3>
+            <p className="text-primary font-bold text-xl mt-2">
+              {selectedPkg?.price.toLocaleString()} đ
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">
+              Chọn Thú cưng áp dụng
+            </label>
+            <select
+              className="w-full p-3 border border-gray-200 rounded-xl outline-none bg-white"
+              value={selectedPetId}
+              onChange={(e) => setSelectedPetId(e.target.value)}
+            >
+              <option value="">-- Chọn bé --</option>
+              {myPets.map((p: any) => (
+                <option key={p.MaTC} value={p.MaTC}>
+                  {p.TenTC} ({p.Loai})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={() => setSelectedPkg(null)}>
+              Hủy bỏ
+            </Button>
+            <Button onClick={handleRegister} disabled={!selectedPetId}>
+              Xác nhận & Thanh toán
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      <SuccessModal
+        isOpen={showSuccess}
+        onClose={() => {
+          setShowSuccess(false);
+          navigate("/invoices");
+        }}
+        title="Đăng ký thành công!"
+        message="Gói dịch vụ đã kích hoạt."
+      />
     </div>
   );
 };

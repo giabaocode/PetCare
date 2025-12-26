@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-// Đảm bảo import đúng đường dẫn schema mới
 import { UserProfile, UserRole } from "../types/schema";
+import { authApi } from "../api/authApi"; // <--- Dùng API
 
 interface AuthContextType {
   token: string | null;
   profile: UserProfile | null;
   isLoading: boolean;
-  login: (token: string) => Promise<void>;
+  login: (token: string) => Promise<UserRole>;
   logout: () => void;
 }
 
@@ -15,48 +15,42 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [token, setToken] = useState<string | null>("mock-token-123");
-
-  // FIX: Cập nhật Mock Profile khớp với Schema mới
-  const [profile, setProfile] = useState<UserProfile | null>({
-    MaND: "user-01",
-    MaKH: "KH001", // Dùng cho chức năng Đặt lịch/Xem thú cưng
-    MaNV: "NV001", // Dùng cho chức năng Nhân sự/Lương
-    MaCN: "CN01", // QUAN TRỌNG: Dùng cho Inventory & Schedule (Lọc theo chi nhánh)
-    HoTen: "Nguyễn Văn Tester",
-    Email: "tester@petcare.com",
-    SDT: "0909123456",
-    TenHang: "VIP",
-    DiemTichLuy: 5000,
-    Role: "ADMIN", // Full quyền để test
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("pcx_token")
+  );
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem("pcx_profile");
+    return saved ? JSON.parse(saved) : null;
   });
-
   const [isLoading, setIsLoading] = useState(false);
 
-  const login = async (t: string) => {
-    console.log("Mock login với token:", t);
-    setToken(t);
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const savedProfile = localStorage.getItem("pcx_profile");
+      if (savedProfile) setProfile(JSON.parse(savedProfile));
+    };
+    window.addEventListener("local-storage-update", handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("local-storage-update", handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
-    // Logic giả lập: Nếu token là 'customer' thì đổi role, ngược lại là staff
-    if (t === "customer-token") {
-      setProfile({
-        MaND: "user-02",
-        MaKH: "KH002",
-        HoTen: "Khách Hàng Demo",
-        Email: "khach@gmail.com",
-        Role: "CUSTOMER",
-      } as UserProfile);
-    } else {
-      // Mặc định login vào là ADMIN/DOCTOR
-      setProfile({
-        MaND: "user-01",
-        MaKH: "KH001",
-        MaNV: "NV001",
-        MaCN: "CN01",
-        HoTen: "BS. Nguyễn Văn Tester",
-        Email: "bacsitester@petcare.com",
-        Role: "DOCTOR", // Hoặc ADMIN
-      } as UserProfile);
+  const login = async (inputIdentifier: string): Promise<UserRole> => {
+    setIsLoading(true);
+    try {
+      setToken(inputIdentifier);
+      localStorage.setItem("pcx_token", inputIdentifier);
+
+      // GỌI API LOGIN
+      const foundProfile: any = await authApi.login(inputIdentifier);
+
+      setProfile(foundProfile);
+      localStorage.setItem("pcx_profile", JSON.stringify(foundProfile));
+      return foundProfile!.Role;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -64,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setToken(null);
     setProfile(null);
     localStorage.removeItem("pcx_token");
+    localStorage.removeItem("pcx_profile");
   };
 
   return (
@@ -74,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth inside provider");
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
 };

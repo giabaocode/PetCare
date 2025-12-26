@@ -6,7 +6,7 @@ export const usersApi = {
     return { success: true };
   },
 
-  // --- THÊM HÀM NÀY ĐỂ FIX PACKAGES ---
+  // Hàm này thay thế cho việc gọi api.get('/pets') hoặc db.getPets()
   getMyPets: async (maKH: string) => {
     const allPets = db.getPets();
     return allPets.filter((p: any) => p.MaKH === maKH);

@@ -12,9 +12,10 @@ import {
   ShieldCheck,
   Calendar,
 } from "lucide-react";
-// Import DB & Modal
-import { db } from "../utils/dataProvider";
+// FIX 1: Import API thay vì db trực tiếp
+import { authApi } from "../api/authApi";
 import { SuccessModal } from "../components/ui/SuccessModal";
+import { ErrorModal } from "../components/ui/ErrorModal";
 
 export const Register: React.FC = () => {
   const {
@@ -24,14 +25,17 @@ export const Register: React.FC = () => {
   } = useForm<any>();
   const navigate = useNavigate();
 
-  // State điều khiển Modal
+  // FIX 2: Khai báo đầy đủ các State
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const onSubmit = async (d: any) => {
+    setIsLoading(true); // Bắt đầu loading
     try {
-      await new Promise((r) => setTimeout(r, 800));
-
-      db.addUser({
+      // FIX 3: Gọi qua API chuẩn (đã bao gồm delay giả lập)
+      await authApi.register({
         HoTen: d.HoTen,
         Email: d.Email,
         SDT: d.SDT,
@@ -39,12 +43,17 @@ export const Register: React.FC = () => {
         CCCD: d.CCCD,
         NgaySinh: d.NgaySinh,
         GioiTinh: d.GioiTinh,
+        Role: "CUSTOMER", // Mặc định là khách hàng
       });
 
-      // Thay vì alert -> Bật Modal
+      // Thành công -> Bật Modal xanh
       setShowSuccess(true);
     } catch (e: any) {
-      alert(e.message); // Có thể thay bằng Error Modal nếu muốn
+      // Thất bại -> Bật Modal đỏ
+      setErrorMsg(e.message || "Đăng ký thất bại");
+      setShowError(true);
+    } finally {
+      setIsLoading(false); // Tắt loading dù thành công hay thất bại
     }
   };
 
@@ -168,8 +177,9 @@ export const Register: React.FC = () => {
             <Button
               type="submit"
               className="w-full h-12 text-lg shadow-lg shadow-primary/20 mt-4"
+              disabled={isLoading}
             >
-              Đăng ký tài khoản
+              {isLoading ? "Đang xử lý..." : "Đăng ký tài khoản"}
             </Button>
           </form>
 
@@ -205,7 +215,15 @@ export const Register: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL THÀNH CÔNG */}
+      {/* Modal Lỗi */}
+      <ErrorModal
+        isOpen={showError}
+        onClose={() => setShowError(false)}
+        title="Đăng ký thất bại"
+        message={errorMsg}
+      />
+
+      {/* Modal Thành Công */}
       <SuccessModal
         isOpen={showSuccess}
         onClose={() => {

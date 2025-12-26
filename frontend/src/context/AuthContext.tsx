@@ -24,13 +24,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // ... trong AuthProvider
   useEffect(() => {
     const handleStorageChange = () => {
+      // Khi dataProvider bắn tín hiệu, đọc lại localStorage ngay
       const savedProfile = localStorage.getItem("pcx_profile");
-      if (savedProfile) setProfile(JSON.parse(savedProfile));
+      if (savedProfile) {
+        setProfile(JSON.parse(savedProfile));
+      }
     };
+
     window.addEventListener("local-storage-update", handleStorageChange);
     window.addEventListener("storage", handleStorageChange);
+
     return () => {
       window.removeEventListener("local-storage-update", handleStorageChange);
       window.removeEventListener("storage", handleStorageChange);

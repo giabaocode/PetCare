@@ -7,8 +7,9 @@ import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { SuccessModal } from "../ui/SuccessModal";
-import { Modal } from "../ui/Modal"; // Import Modal thường để báo lỗi
-import { ArrowRight, ArrowLeft } from "lucide-react";
+import { Modal } from "../ui/Modal";
+import { ErrorModal } from "../ui/ErrorModal"; // Dùng ErrorModal cho đẹp
+import { ArrowRight, ArrowLeft, Calendar } from "lucide-react";
 import { db } from "../../utils/dataProvider";
 
 export const BookingWizard: React.FC = () => {
@@ -18,10 +19,17 @@ export const BookingWizard: React.FC = () => {
 
   // State Modals
   const [showSuccess, setShowSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showError, setShowError] = useState(false); // State hiển thị modal lỗi
+  const [errorMsg, setErrorMsg] = useState(""); // Nội dung lỗi
 
-  // Form handling
-  const { register, handleSubmit, watch, setValue } = useForm({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    trigger,
+    formState: { errors },
+  } = useForm({
     defaultValues: {
       maCN: "",
       serviceType: "EXAMINATION",
@@ -36,6 +44,7 @@ export const BookingWizard: React.FC = () => {
   // Watchers
   const selectedBranch = watch("maCN");
   const selectedService = watch("serviceType");
+  const selectedDateTime = watch("dateTime");
 
   // State dữ liệu động
   const [availableDoctors, setAvailableDoctors] = useState<any[]>([]);
@@ -70,6 +79,24 @@ export const BookingWizard: React.FC = () => {
     }
   }, [selectedBranch, setValue]);
 
+  // --- HÀM CHUYỂN BƯỚC ĐÃ SỬA ---
+  const handleNextStep = async () => {
+    const isValid = await trigger(["maCN", "maTC", "dateTime"]);
+
+    let isVaccineValid = true;
+    if (selectedService === "VACCINATION") {
+      isVaccineValid = await trigger("maVaccine");
+    }
+
+    if (isValid && isVaccineValid) {
+      setStep(2);
+    } else {
+      // FIX: Thay alert bằng Error Modal
+      setErrorMsg("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
+      setShowError(true);
+    }
+  };
+
   const mutation = useMutation({
     mutationFn: async (d: any) => {
       let symptomText = d.trieuChung;
@@ -86,8 +113,9 @@ export const BookingWizard: React.FC = () => {
     },
     onSuccess: () => setShowSuccess(true),
     onError: (err: any) => {
-      // Bật Modal Lỗi thay vì alert
+      // Khi API lỗi cũng hiện Modal
       setErrorMsg(err.message || "Có lỗi xảy ra khi đặt lịch");
+      setShowError(true);
     },
   });
 
@@ -101,7 +129,8 @@ export const BookingWizard: React.FC = () => {
       <div className="mb-8 text-center">
         <h2 className="text-2xl font-bold text-gray-800">Đặt lịch khám</h2>
         <p className="text-gray-500">
-          Bước {step}/2: {step === 1 ? "Thông tin dịch vụ" : "Xác nhận"}
+          Bước {step}/2:{" "}
+          {step === 1 ? "Thông tin dịch vụ" : "Xác nhận thông tin"}
         </p>
         <div className="flex gap-2 justify-center mt-4">
           <div
@@ -138,6 +167,21 @@ export const BookingWizard: React.FC = () => {
               </select>
             </div>
 
+            {/* Chọn Ngày Giờ */}
+            <div>
+              <label className="block font-medium text-gray-700 mb-2">
+                Thời gian khám (*)
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                <Input
+                  type="datetime-local"
+                  {...register("dateTime", { required: true })}
+                  className="pl-10 w-full"
+                />
+              </div>
+            </div>
+
             {/* Chọn Bác sĩ */}
             <div>
               <label className="block font-medium text-gray-700 mb-2">
@@ -155,11 +199,6 @@ export const BookingWizard: React.FC = () => {
                   </option>
                 ))}
               </select>
-              {!selectedBranch && (
-                <p className="text-xs text-orange-500 mt-1">
-                  Vui lòng chọn chi nhánh trước
-                </p>
-              )}
             </div>
 
             {/* Chọn Thú cưng */}
@@ -194,7 +233,7 @@ export const BookingWizard: React.FC = () => {
                   value="EXAMINATION"
                   {...register("serviceType")}
                   className="hidden"
-                />
+                />{" "}
                 Khám bệnh
               </label>
               <label
@@ -209,7 +248,7 @@ export const BookingWizard: React.FC = () => {
                   value="VACCINATION"
                   {...register("serviceType")}
                   className="hidden"
-                />
+                />{" "}
                 Tiêm phòng
               </label>
             </div>
@@ -246,7 +285,7 @@ export const BookingWizard: React.FC = () => {
             )}
 
             <div className="pt-4 flex justify-end">
-              <Button type="button" onClick={() => setStep(2)}>
+              <Button type="button" onClick={handleNextStep}>
                 Tiếp tục <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
@@ -255,7 +294,24 @@ export const BookingWizard: React.FC = () => {
 
         {step === 2 && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-gray-50 p-6 rounded-xl space-y-3">
+            <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-center">
+              <p className="text-green-800 font-medium">
+                Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.
+              </p>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+              <div className="flex justify-between border-b border-dashed pb-3">
+                <span className="text-gray-500">Thời gian khám:</span>
+                <span className="font-bold text-primary text-lg">
+                  {selectedDateTime
+                    ? new Date(selectedDateTime).toLocaleString("vi-VN", {
+                        dateStyle: "full",
+                        timeStyle: "short",
+                      })
+                    : "Chưa chọn"}
+                </span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Chi nhánh:</span>
                 <span className="font-medium text-gray-900">
@@ -269,6 +325,15 @@ export const BookingWizard: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-500">Thú cưng:</span>
+                <span className="font-medium text-gray-900">
+                  {
+                    myPets.find((p) => String(p.MaTC) === String(watch("maTC")))
+                      ?.TenTC
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-500">Dịch vụ:</span>
                 <span className="font-medium text-gray-900">
                   {watch("serviceType") === "EXAMINATION"
@@ -276,14 +341,17 @@ export const BookingWizard: React.FC = () => {
                     : "Tiêm phòng"}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Thời gian:</span>
-                <Input
-                  type="datetime-local"
-                  {...register("dateTime", { required: true })}
-                  className="w-auto h-9"
-                />
-              </div>
+              {watch("serviceType") === "VACCINATION" && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Vaccine:</span>
+                  <span className="font-medium text-gray-900">
+                    {
+                      availableVaccines.find((v) => v.id === watch("maVaccine"))
+                        ?.name
+                    }
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -293,7 +361,7 @@ export const BookingWizard: React.FC = () => {
                 onClick={() => setStep(1)}
                 className="flex-1"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại
+                <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại sửa
               </Button>
               <Button type="submit" className="flex-[2]">
                 Xác nhận Đặt lịch
@@ -314,21 +382,13 @@ export const BookingWizard: React.FC = () => {
         message="Chúng tôi đã nhận được yêu cầu. Vui lòng đến đúng giờ."
       />
 
-      {/* Modal Báo Lỗi */}
-      <Modal
-        isOpen={!!errorMsg}
-        onClose={() => setErrorMsg(null)}
-        title="Đã có lỗi xảy ra"
-      >
-        <div className="p-4">
-          <p className="text-red-600 mb-4">{errorMsg}</p>
-          <div className="flex justify-end">
-            <Button onClick={() => setErrorMsg(null)} variant="secondary">
-              Đóng
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* Modal Báo Lỗi (Thay cho alert) */}
+      <ErrorModal
+        isOpen={showError}
+        onClose={() => setShowError(false)}
+        title="Thông tin chưa đủ"
+        message={errorMsg || "Vui lòng kiểm tra lại thông tin."}
+      />
     </div>
   );
 };

@@ -172,7 +172,7 @@ export const db = {
     if (pointsToAdd > 0) {
       let newTotalPoints = 0;
 
-      // 1. Cập nhật vào Database tổng (pcx_users)
+      // 1. CẬP NHẬT DATABASE (pcx_users)
       const updatedUsers = users.map((u: any) => {
         if (u.MaKH === maKH) {
           const currentPoints = u.DiemTichLuy || 0;
@@ -181,10 +181,11 @@ export const db = {
         }
         return u;
       });
-      setStorage("pcx_users", updatedUsers);
+      // Lưu lại danh sách user mới
+      localStorage.setItem("pcx_users", JSON.stringify(updatedUsers));
 
-      // 2. Cập nhật ngay vào Phiên đăng nhập hiện tại (pcx_profile)
-      // FIX QUAN TRỌNG: Giúp UI cập nhật điểm ngay lập tức không cần F5
+      // 2. CẬP NHẬT PHIÊN ĐĂNG NHẬP HIỆN TẠI (pcx_profile)
+      // -> Bước này giúp số điểm trên Header nhảy ngay lập tức
       const currentProfile = JSON.parse(
         localStorage.getItem("pcx_profile") || "{}"
       );
@@ -195,9 +196,9 @@ export const db = {
         };
         localStorage.setItem("pcx_profile", JSON.stringify(updatedProfile));
 
-        // Bắn sự kiện để ép giao diện render lại
-        window.dispatchEvent(new Event("storage"));
+        // Bắn pháo hiệu để AuthContext biết mà render lại
         window.dispatchEvent(new Event("local-storage-update"));
+        window.dispatchEvent(new Event("storage"));
       }
 
       console.log(
@@ -205,7 +206,6 @@ export const db = {
       );
     }
   },
-
   getAppointments: () => getStorage("pcx_appointments", INITIAL_APPOINTMENTS),
   addAppointment: (appt: any) => {
     const list = db.getAppointments();

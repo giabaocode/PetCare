@@ -40,4 +40,16 @@ export const authApi = {
 
     return user;
   },
+
+  register: async (userData: any) => {
+    await delay(500); // Giả lập mạng
+    try {
+      // Gọi db.addUser (hàm này sẽ throw Error nếu trùng Email/SĐT)
+      const newUser = db.addUser(userData);
+      return newUser;
+    } catch (error: any) {
+      // Ném lỗi ra để giao diện bắt được
+      throw new Error(error.message || "Đăng ký thất bại");
+    }
+  },
 };

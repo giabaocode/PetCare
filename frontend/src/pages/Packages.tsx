@@ -1,4 +1,3 @@
-// frontend/src/pages/Packages.tsx
 import React, { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
@@ -7,10 +6,10 @@ import { Shield, Check, Star, Clock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-// FIX 1: Import đúng đường dẫn file API vừa tạo
-import { packagesApi } from "../api/packages";
+// FIX: Import đúng tên file mới
+import { packagesApi } from "../api/packagesApi";
 import { usersApi } from "../api/userApi";
-import { invoicesApi } from "../api/invoices";
+import { invoicesApi } from "../api/invoicesApi";
 
 export const Packages: React.FC = () => {
   const { profile } = useAuth();
@@ -19,112 +18,69 @@ export const Packages: React.FC = () => {
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [selectedPetId, setSelectedPetId] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
-
-  // FIX 2: Thay db.getPets() bằng State + API Call
   const [myPets, setMyPets] = useState<any[]>([]);
+  const [packagesList, setPackagesList] = useState<any[]>([]);
 
+  // Lấy danh sách Pet và Gói từ API (Forward Declaration chuẩn)
   useEffect(() => {
-    const fetchPets = async () => {
+    const fetchData = async () => {
       if (profile?.MaKH) {
         const pets = await usersApi.getMyPets(profile.MaKH);
         setMyPets(pets);
       }
+      const pkgs = await packagesApi.getAll();
+      setPackagesList(pkgs);
     };
-    fetchPets();
+    fetchData();
   }, [profile]);
-
-  const PACKAGES = [
-    {
-      id: "PKG01",
-      name: "Gói Cơ Bản (Mèo)",
-      discount: "-5%",
-      price: 500000,
-      duration: "6 tháng",
-      durationMonth: 6,
-      features: ["Đầy đủ vaccine cơ bản", "Miễn phí 2 lần khám"],
-      icon: <Shield className="w-6 h-6" />,
-      color: "bg-gray-100 text-gray-600",
-      benefits: { freeExamLimit: 2 },
-    },
-    {
-      id: "PKG02",
-      name: "Gói Toàn Diện (Chó)",
-      discount: "-15%",
-      price: 1200000,
-      duration: "12 tháng",
-      durationMonth: 12,
-      features: [
-        "Đầy đủ vaccine cơ bản",
-        "Miễn phí 2 lần khám",
-        "Giảm 10% Spa",
-      ],
-      icon: <Shield className="w-6 h-6" />,
-      color: "bg-green-100 text-green-600",
-      isPopular: true,
-      benefits: { freeExamLimit: 2 },
-    },
-    {
-      id: "PKG03",
-      name: "Gói Sơ Sinh (Baby)",
-      discount: "-10%",
-      price: 800000,
-      duration: "3 tháng",
-      durationMonth: 3,
-      features: [
-        "Đầy đủ vaccine cơ bản",
-        "Miễn phí 2 lần khám",
-        "Tặng sữa tắm",
-      ],
-      icon: <Shield className="w-6 h-6" />,
-      color: "bg-blue-100 text-blue-600",
-      benefits: { freeExamLimit: 2 },
-    },
-  ];
 
   const handleRegister = async () => {
     if (!selectedPetId) {
-      alert("Vui lòng chọn thú cưng để áp dụng!");
+      alert("Vui lòng chọn thú cưng!");
       return;
     }
 
-    // --- FIX LỖI TYPE Ở ĐÂY ---
-    // Kiểm tra kỹ: Nếu chưa có thông tin KH thì không cho chạy tiếp
-    if (!profile?.MaKH) {
-      alert("Vui lòng đăng nhập lại để thực hiện chức năng này!");
+    // FIX: Kiểm tra kỹ profile trước khi dùng
+    if (!profile || !profile.MaKH) {
+      alert("Vui lòng đăng nhập lại.");
       return;
     }
 
-    // 1. GỌI API MUA GÓI
-    await packagesApi.buyPackage({
-      MaTC: selectedPetId,
-      MaKH: profile.MaKH, // Lúc này TS đã biết chắc chắn MaKH là string (không bị undefined nữa)
-      Package: selectedPkg,
-    });
+    try {
+      // 1. Mua gói
+      await packagesApi.buyPackage({
+        MaTC: selectedPetId,
+        MaKH: profile.MaKH,
+        Package: selectedPkg,
+      });
 
-    // 2. GỌI API CỘNG ĐIỂM
-    await usersApi.addPoints(profile.MaKH, selectedPkg.price);
+      // 2. Cộng điểm
+      await usersApi.addPoints(profile.MaKH, selectedPkg.price);
 
-    // 3. GỌI API TẠO HÓA ĐƠN
-    await invoicesApi.create({
-      MaHD: Math.floor(200000 + Math.random() * 800000),
-      NgayLap: new Date().toISOString(),
-      TongTien: selectedPkg.price,
-      HinhThucThanhToan: "Ví điện tử",
-      TrangThai: "Đã thanh toán",
-      MaKH: profile.MaKH,
-      MaCN: "CN01",
-      ChiTietHoaDonDichVu: [
-        {
-          DichVu: { TenDV: `Đăng ký: ${selectedPkg.name}` },
-          SoLuong: 1,
-          ThanhTien: selectedPkg.price,
-        },
-      ],
-      ChiTietHoaDonSanPham: [],
-    });
+      // 3. Tạo hóa đơn
+      await invoicesApi.create({
+        MaHD: Math.floor(200000 + Math.random() * 800000),
+        NgayLap: new Date().toISOString(),
+        TongTien: selectedPkg.price,
+        HinhThucThanhToan: "Ví điện tử / Thẻ",
+        TrangThai: "Đã thanh toán",
+        MaKH: profile.MaKH,
+        MaCN: "CN01",
+        ChiTietHoaDonDichVu: [
+          {
+            DichVu: { TenDV: `Đăng ký: ${selectedPkg.name}` },
+            SoLuong: 1,
+            ThanhTien: selectedPkg.price,
+          },
+        ],
+        ChiTietHoaDonSanPham: [],
+      });
 
-    setSelectedPkg(null);
-    setShowSuccess(true);
+      setSelectedPkg(null);
+      setShowSuccess(true);
+    } catch (e) {
+      alert("Có lỗi xảy ra, vui lòng thử lại.");
+    }
   };
 
   return (
@@ -137,25 +93,27 @@ export const Packages: React.FC = () => {
           Bảo vệ thú cưng toàn diện với chi phí tối ưu.
         </p>
       </div>
+
+      {/* Render danh sách gói động từ API */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {PACKAGES.map((pkg) => (
+        {packagesList.map((pkg) => (
           <div
             key={pkg.id}
             className={`relative bg-white rounded-3xl p-8 border-2 transition-all hover:shadow-xl flex flex-col ${
-              pkg.isPopular
+              pkg.id === "PKG02"
                 ? "border-primary shadow-lg scale-105 z-10"
                 : "border-gray-100"
             }`}
           >
-            {pkg.isPopular && (
+            {pkg.id === "PKG02" && (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-orange-500 text-white px-4 py-1 rounded-full text-sm font-bold flex items-center shadow-lg shadow-orange-500/30">
                 <Star className="w-3 h-3 mr-1 fill-white" /> Phổ biến nhất
               </div>
             )}
             <div
-              className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${pkg.color}`}
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 bg-blue-50 text-blue-600`}
             >
-              {pkg.icon}
+              <Shield className="w-6 h-6" />
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-2">
               {pkg.name}
@@ -171,7 +129,7 @@ export const Packages: React.FC = () => {
                 <Clock className="w-4 h-4 mr-2 text-primary" />
                 Thời hạn <span className="font-bold ml-1">{pkg.duration}</span>
               </div>
-              {pkg.features.map((feat, idx) => (
+              {pkg.features.map((feat: string, idx: number) => (
                 <div
                   key={idx}
                   className="flex items-center text-sm text-slate-600"
@@ -186,7 +144,7 @@ export const Packages: React.FC = () => {
               </p>
               <Button
                 className={`w-full ${
-                  pkg.isPopular ? "shadow-lg shadow-primary/30" : ""
+                  pkg.id === "PKG02" ? "shadow-lg shadow-primary/30" : ""
                 }`}
                 onClick={() => setSelectedPkg(pkg)}
               >
@@ -196,6 +154,7 @@ export const Packages: React.FC = () => {
           </div>
         ))}
       </div>
+
       <Modal
         isOpen={!!selectedPkg}
         onClose={() => setSelectedPkg(null)}

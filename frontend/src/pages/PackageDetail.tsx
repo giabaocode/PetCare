@@ -6,9 +6,10 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/Button";
 import { ArrowLeft, CheckCircle2, Shield } from "lucide-react";
 
-// FIX: Import API chuẩn
-import { packagesApi } from "../api/packages";
+// Import đúng API
+import { packagesApi } from "../api/packagesApi";
 import { usersApi } from "../api/userApi";
+import { invoicesApi } from "../api/invoicesApi";
 
 export const PackageDetail: React.FC = () => {
   const { id } = useParams();
@@ -16,33 +17,66 @@ export const PackageDetail: React.FC = () => {
   const navigate = useNavigate();
   const { register, handleSubmit } = useForm();
 
-  // FIX: Lấy thông tin gói từ API (bỏ type GoiTiem nếu chưa định nghĩa, dùng any cho nhanh)
+  // Lấy thông tin gói
   const { data: pkg } = useQuery({
     queryKey: ["package", id],
     queryFn: () => packagesApi.getOne(String(id)),
   });
 
-  // FIX: Lấy danh sách thú cưng qua usersApi
+  // Lấy danh sách thú cưng
   const { data: pets } = useQuery({
     queryKey: ["pets", profile?.MaKH],
     queryFn: () => usersApi.getMyPets(profile?.MaKH || ""),
     enabled: !!profile?.MaKH,
   });
 
+  // Logic mua gói
   const mutation = useMutation({
-    mutationFn: (d: any) =>
-      packagesApi.buyPackage({
-        Package: pkg, // Truyền nguyên object gói vào
-        MaKH: profile?.MaKH!,
-        MaTC: d.maTC, // Lấy từ form
-      }),
+    mutationFn: async (d: any) => {
+      // 1. Kiểm tra đăng nhập
+      if (!profile?.MaKH) throw new Error("Vui lòng đăng nhập");
+
+      // 2. FIX LỖI NULL: Kiểm tra xem gói đã tải xong chưa
+      if (!pkg)
+        throw new Error("Thông tin gói chưa được tải, vui lòng thử lại.");
+
+      // 3. Mua (Lúc này TS đã biết chắc chắn pkg tồn tại)
+      await packagesApi.buyPackage({
+        Package: pkg,
+        MaKH: profile.MaKH,
+        MaTC: d.maTC,
+      });
+
+      // 4. Cộng điểm
+      await usersApi.addPoints(profile.MaKH, pkg.price);
+
+      // 5. Tạo hóa đơn
+      await invoicesApi.create({
+        MaHD: Math.floor(200000 + Math.random() * 800000),
+        NgayLap: new Date().toISOString(),
+        TongTien: pkg.price,
+        HinhThucThanhToan: "Thanh toán sau",
+        TrangThai: "Đã thanh toán",
+        MaKH: profile.MaKH,
+        MaCN: "CN01",
+        ChiTietHoaDonDichVu: [
+          {
+            DichVu: { TenDV: `Đăng ký: ${pkg.name}` },
+            SoLuong: 1,
+            ThanhTien: pkg.price,
+          },
+        ],
+        ChiTietHoaDonSanPham: [],
+      });
+    },
     onSuccess: () => {
       alert("Đăng ký thành công!");
-      navigate("/dashboard");
+      navigate("/invoices");
     },
     onError: (err: any) => alert("Lỗi: " + err.message),
   });
 
+  // Render Loading state
   if (!pkg) return <div className="p-10 text-center">Loading...</div>;
 
   return (
@@ -60,6 +94,7 @@ export const PackageDetail: React.FC = () => {
             <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-6">
               <Shield className="w-8 h-8 text-white" />
             </div>
+            {/* Vì có dòng if(!pkg) return ở trên nên ở dưới này dùng pkg.name thoải mái */}
             <h1 className="text-4xl font-bold mb-4">{pkg.name}</h1>
             <p className="text-gray-300 text-lg mb-8">
               Gói chăm sóc sức khỏe toàn diện với chi phí tối ưu nhất.

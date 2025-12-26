@@ -1,6 +1,6 @@
 import { db } from "../utils/dataProvider";
 
-// Dữ liệu gói cứng (Mock Data cho API)
+// Mock Data Gói (Nên để ở đây thay vì hardcode trong Component)
 const MOCK_PACKAGES = [
   {
     id: "PKG01",
@@ -44,6 +44,20 @@ const MOCK_PACKAGES = [
 ];
 
 export const packagesApi = {
+  // Lấy tất cả gói
+  getAll: async () => {
+    return MOCK_PACKAGES;
+  },
+
+  // Lấy chi tiết 1 gói (Fix cho trang PackageDetail)
+  getOne: async (id: string | number) => {
+    // Map ID số (nếu có) sang ID chuỗi PKG0x
+    const pkgId = String(id).startsWith("PKG") ? id : `PKG0${id}`;
+    const pkg = MOCK_PACKAGES.find((p) => p.id === pkgId);
+    return pkg || null;
+  },
+
+  // Mua gói
   buyPackage: async (data: { MaTC: string; MaKH: string; Package: any }) => {
     const expireDate = new Date();
     expireDate.setMonth(expireDate.getMonth() + data.Package.durationMonth);
@@ -65,13 +79,5 @@ export const packagesApi = {
 
   useBenefit: async (maTC: string) => {
     return db.usePackageBenefit(maTC);
-  },
-
-  // --- THÊM HÀM NÀY CHO PACKAGE DETAIL ---
-  getOne: async (id: string | number) => {
-    // Tìm gói theo ID (VD: PKG01)
-    // Lưu ý: Nếu id truyền vào là số (VD: 1, 2, 3), cần map sang PKG0x
-    const pkgId = String(id).startsWith("PKG") ? id : `PKG0${id}`;
-    return MOCK_PACKAGES.find((p) => p.id === pkgId);
   },
 };

@@ -14,9 +14,9 @@ import { SuccessModal } from "../../components/ui/SuccessModal";
 import { getSharedAppointments, db } from "../../utils/dataProvider"; // Vẫn dùng queue mock
 import { useAuth } from "../../context/AuthContext";
 // IMPORT API
-import { packagesApi } from "../../api/packages";
+import { packagesApi } from "../../api/packagesApi";
 import { usersApi } from "../../api/userApi";
-import { invoicesApi } from "../../api/invoices";
+import { invoicesApi } from "../../api/invoicesApi";
 
 export const ReceptionDesk: React.FC = () => {
   const { profile } = useAuth();
@@ -131,59 +131,67 @@ export const ReceptionDesk: React.FC = () => {
   const confirmPayment = async () => {
     if (!paymentGuest) return;
 
-    // 1. GỌI API TRỪ LƯỢT GÓI
-    if (paymentGuest.billDetails.discount > 0) {
-      await packagesApi.useBenefit(paymentGuest.MaTC);
-    }
+    try {
+      // 1. TRỪ LƯỢT GÓI (Nếu có dùng)
+      if (paymentGuest.billDetails.discount > 0) {
+        await packagesApi.useBenefit(paymentGuest.MaTC);
+      }
 
-    // 2. GỌI API CỘNG ĐIỂM
-    if (paymentGuest.MaKH && paymentGuest.billDetails.totalAmount > 0) {
-      await usersApi.addPoints(
-        paymentGuest.MaKH,
-        paymentGuest.billDetails.totalAmount
+      // 2. CỘNG ĐIỂM (QUAN TRỌNG: Phải gọi hàm này mới tăng điểm)
+      // Chỉ cộng nếu có MaKH và số tiền > 0
+      if (
+        paymentGuest.MaKH &&
+        !paymentGuest.MaKH.startsWith("GUEST") &&
+        paymentGuest.billDetails.totalAmount > 0
+      ) {
+        await usersApi.addPoints(
+          paymentGuest.MaKH,
+          paymentGuest.billDetails.totalAmount
+        );
+      }
+
+      // 3. Update trạng thái Lịch hẹn (Vẫn dùng db trực tiếp hoặc qua appointmentsApi nếu đã tạo)
+      db.updateAppointment(paymentGuest.id, {
+        paymentStatus: "PAID",
+        status: "COMPLETED",
+        actualAmount: paymentGuest.billDetails.totalAmount,
+      });
+
+      // 4. TẠO HÓA ĐƠN
+      await invoicesApi.create({
+        MaHD: Math.floor(100000 + Math.random() * 900000),
+        NgayLap: new Date().toISOString(),
+        TongTien: paymentGuest.billDetails.totalAmount,
+        HinhThucThanhToan: "Tiền mặt",
+        TrangThai: "Đã thanh toán",
+        MaKH: paymentGuest.MaKH || "GUEST",
+        MaCN: paymentGuest.MaCN || profile?.MaCN || "CN01",
+        GhiChu: paymentGuest.billDetails.discountNote,
+        ChiTietHoaDonDichVu: [
+          {
+            DichVu: { TenDV: paymentGuest.service },
+            SoLuong: 1,
+            ThanhTien: paymentGuest.billDetails.serviceFee,
+          },
+        ],
+        ChiTietHoaDonSanPham:
+          paymentGuest.billDetails.medicines?.map((med: any) => ({
+            SanPham: { TenSP: med.medicineName },
+            SoLuong: med.quantity,
+            ThanhTien: med.price * med.quantity,
+          })) || [],
+      });
+
+      setShowPaymentModal(false);
+      setSuccessMsg(
+        `Đã thu ${paymentGuest.billDetails.totalAmount.toLocaleString()}đ thành công!`
       );
+      setShowSuccess(true);
+      setPaymentGuest(null);
+    } catch (e) {
+      alert("Có lỗi khi thanh toán: " + e);
     }
-
-    // 3. Update Lịch hẹn
-    db.updateAppointment(paymentGuest.id, {
-      paymentStatus: "PAID",
-      status: "COMPLETED",
-      actualAmount: paymentGuest.billDetails.totalAmount,
-    });
-
-    // 4. GỌI API TẠO HÓA ĐƠN
-    await invoicesApi.create({
-      MaHD: Math.floor(100000 + Math.random() * 900000),
-      NgayLap: new Date().toISOString(),
-      TongTien: paymentGuest.billDetails.totalAmount,
-      HinhThucThanhToan: "Tiền mặt",
-      TrangThai: "Đã thanh toán",
-      MaKH: paymentGuest.MaKH || "GUEST",
-      MaCN: paymentGuest.MaCN || profile?.MaCN || "CN01",
-      GhiChu: paymentGuest.billDetails.discountNote,
-      ChiTietHoaDonDichVu: [
-        {
-          DichVu: { TenDV: paymentGuest.service },
-          SoLuong: 1,
-          ThanhTien: paymentGuest.billDetails.serviceFee,
-        },
-      ],
-      ChiTietHoaDonSanPham:
-        paymentGuest.billDetails.medicines?.map((med: any) => ({
-          SanPham: { TenSP: med.medicineName },
-          SoLuong: med.quantity,
-          ThanhTien: med.price * med.quantity,
-        })) || [],
-    });
-
-    setShowPaymentModal(false);
-    setSuccessMsg(
-      `Đã thu ${paymentGuest.billDetails.totalAmount.toLocaleString()}đ thành công!`
-    );
-    setShowSuccess(true);
-    setPaymentGuest(null);
   };
-
   // ... (Phần render UI giữ nguyên, không thay đổi)
   const filteredQueue = queue.filter((item) =>
     item.patientName?.toLowerCase().includes(searchTerm.toLowerCase())

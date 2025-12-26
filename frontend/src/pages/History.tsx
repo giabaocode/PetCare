@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { userDataApi } from "../api/user-data";
-import { invoicesApi } from "../api/invoices";
+import { invoicesApi } from "../api/invoicesApi";
 import { useAuth } from "../context/AuthContext";
 import { Stethoscope, Syringe, FileText, CalendarDays } from "lucide-react";
 

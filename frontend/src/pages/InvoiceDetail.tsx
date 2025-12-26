@@ -1,12 +1,11 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-// FIX: Import đúng file API
-import { invoicesApi } from "../api/invoices";
+// FIX: Import đúng tên file mới đổi
+import { invoicesApi } from "../api/invoicesApi";
 import { Button } from "../components/ui/Button";
 import { ArrowLeft, ShoppingBag, Stethoscope } from "lucide-react";
 
-// FIX: Sửa cú pháp export
 export const InvoiceDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -14,20 +13,21 @@ export const InvoiceDetail: React.FC = () => {
   const { data: invoiceData, isLoading } = useQuery({
     queryKey: ["invoice", id],
     queryFn: async () => {
-      // Gọi API getOne mới tạo
+      // FIX: Gọi hàm getOne đã được thêm vào API
       return await invoicesApi.getOne(Number(id));
     },
     enabled: !!id,
   });
 
   if (isLoading) return <div className="p-6 text-center">Đang tải...</div>;
-  if (!invoiceData)
+  if (!invoiceData) {
     return (
       <div className="p-6 text-center">
-        <p className="mb-4">Không tìm thấy hóa đơn #{id}</p>
+        <p className="mb-4">Không tìm thấy hóa đơn này.</p>
         <Button onClick={() => navigate("/invoices")}>Quay lại</Button>
       </div>
     );
+  }
 
   const products = invoiceData.ChiTietHoaDonSanPham || [];
   const services = invoiceData.ChiTietHoaDonDichVu || [];
@@ -41,6 +41,7 @@ export const InvoiceDetail: React.FC = () => {
       >
         <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại danh sách
       </Button>
+
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
         <div className="bg-slate-50 p-6 border-b border-gray-100 flex justify-between">
           <div>
@@ -63,6 +64,7 @@ export const InvoiceDetail: React.FC = () => {
             </p>
           </div>
         </div>
+
         <div className="p-6 space-y-6">
           {services.length > 0 && (
             <div>

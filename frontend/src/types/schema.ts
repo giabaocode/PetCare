@@ -1,9 +1,15 @@
 // --- 1. ENUMS & CONSTANTS ---
-export type ServiceType = "EXAMINATION" | "VACCINATION";
-export type UserRole = "CUSTOMER" | "DOCTOR" | "RECEPTIONIST" | "ADMIN";
+export type ServiceType = "EXAMINATION" | "VACCINATION" | "SPA";
+export type UserRole =
+  | "CUSTOMER"
+  | "DOCTOR"
+  | "RECEPTIONIST"
+  | "ADMIN"
+  | "STAFF";
 export type BookingStatus =
   | "PENDING"
   | "WAITING"
+  | "WAITING_PAYMENT" // Thêm trạng thái chờ thanh toán từ Backend
   | "COMPLETED"
   | "CANCELLED"
   | "PAID";
@@ -14,133 +20,104 @@ export interface ChiNhanh {
   MaCN: string;
   TenCN: string;
   DiaChi: string;
+  SDT: string;
   ThoiGianMoCua: string;
   ThoiGianDongCua: string;
 }
 
 export interface ThuCung {
-  MaTC: number;
+  MaTC: string;
   MaKH: string;
   TenTC: string;
   Loai: string;
   Giong: string;
   NgaySinh: string;
-  GioiTinh: "Đực" | "Cái";
+  GioiTinh: "Đực" | "Cái" | "Khác";
   TinhTrang?: string;
-  CanNang?: number;
 }
 
-// Sản phẩm & Kho (Cập nhật mới cho InventoryPage)
 export interface SanPham {
   MaSP: string;
   TenSP: string;
-  Loai: "Thuốc" | "Vắc-xin" | "Thức ăn" | "Phụ kiện";
-  DonGia: number;
+  LoaiSP: string;
+  GiaBan: number;
   DonViTinh: string;
-  TonKho: number; // Số lượng thực tế
-  DinhMucToiThieu: number; // Safety Stock (Mới thêm)
+  SoLuongTon: number;
 }
 
 export interface NhanVien {
   MaNV: string;
   HoTen: string;
-  ChucVu: "Bác sĩ" | "Tiếp tân" | "Quản lý";
-  MaCN: string; // Chi nhánh đang làm việc
-  LuongCoBan: number;
-  TrangThai: "Active" | "Inactive";
-  NgayVaoLam: string;
-}
-
-// Lịch sử công tác (Mới thêm cho HRManagement)
-export interface LichSuCongTac {
-  id: number;
-  MaNV: string;
-  TuNgay: string;
-  DenNgay?: string; // null là hiện tại
   ChucVu: string;
-  MaCN: string; // Công tác tại chi nhánh nào
+  MaCN: string;
+  NgayVaoLam: string;
+  LuongHienTai?: number;
 }
 
 export interface GoiTiem {
-  MaGoi: number;
+  MaGoi: string;
   TenGoi: string;
   ThoiHanThang: number;
   PhanTramGiam: number;
 }
 
 export interface HoaDon {
-  MaHD: number;
+  MaHD: string;
+  MaCN: string;
+  MaKH?: string;
+  MaNV?: string;
+  MaLichHen?: string;
   NgayLap: string;
   TongTien: number;
+  TrangThai: "UNPAID" | "PAID" | "CANCELLED";
   HinhThucThanhToan: string;
-  TrangThai?: string;
-  // Chi tiết hóa đơn (Optional vì lúc list không cần load hết)
-  ChiTietSanPham?: { TenSP: string; SoLuong: number; ThanhTien: number }[];
-  ChiTietDichVu?: { TenDV: string; ThanhTien: number }[];
 }
 
-// --- 3. DTOs (Data Transfer Objects - Dữ liệu gửi đi/nhận về từ API) ---
-
-// Profile người dùng đăng nhập
 export interface UserProfile {
   MaND: string;
   HoTen: string;
   SDT?: string;
   Email?: string;
-  MaKH?: string; // Nếu là khách hàng
-  MaNV?: string; // Nếu là nhân viên
-  TenHang?: string; // Hạng thành viên (Bạc, Vàng...)
+  MaKH?: string;
+  MaNV?: string;
+  ChucVu?: string;
+  TenCN?: string;
+  TenHang?: string;
   DiemTichLuy?: number;
   Role: UserRole;
-  MaCN?: string; // Nếu là nhân viên, cần biết thuộc chi nhánh nào
+  MaCN?: string;
 }
 
-// Payload khi Bác sĩ lưu kết quả khám (Quan trọng nhất để trừ kho)
 export interface KetQuaKhamPayload {
-  MaLichHen: string; // ID Booking
+  MaLichHen: string;
   ChanDoan: string;
-  LoiDanBS: string;
-  TaiKham?: boolean;
-  NgayTaiKham?: string;
-  // Danh sách thuốc kê đơn
-  ToaThuoc: {
-    MaSP: string;
-    SoLuong: number;
-    CachDung: string;
+  LoiDan: string;
+  DonThuoc: {
+    medicineId: string;
+    quantity: number;
+    instruction: string;
+    price: number;
   }[];
 }
 
-// Form Input cho Đặt lịch
-export interface BookingInput {
-  MaKH: string;
-  MaTC: string | number;
-  MaCN: string;
-  MaDV?: string; // Nếu chọn dịch vụ cụ thể
-  LoaiDichVu: ServiceType;
-  NgayHen: string; // YYYY-MM-DD
-  GioHen: string; // HH:mm
-  TrieuChung?: string;
-}
-
-// Dữ liệu hiển thị trên Lịch làm việc (StaffSchedule)
 export interface AppointmentView {
-  id: string;
-  time: string;
-  patientName: string;
-  petName: string;
-  type: string; // Chó/Mèo
-  service: string;
-  symptom: string;
-  status: BookingStatus;
-  doctorName?: string; // Bác sĩ được chỉ định
+  MaLichHen: string;
+  ThoiGianHen: string;
+  TenKhachHang: string;
+  SDTKhachHang: string;
+  TenTC: string;
+  Loai: string;
+  LoaiDichVu: string;
+  TrieuChung: string;
+  TrangThai: BookingStatus;
+  TenBacSi?: string;
 }
 
 export interface FeedbackInput {
-  MaCN: string;
   MaKH: string;
+  MaCN?: string;
   DiemChatLuong: number;
   ThaiDoNhanVien: number;
   MucHaiLongTongThe: number;
   BinhLuan: string;
-  NgayDanhGia: string;
 }

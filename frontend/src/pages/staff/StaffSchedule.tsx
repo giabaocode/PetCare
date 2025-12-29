@@ -1,52 +1,79 @@
-// frontend/src/pages/staff/StaffSchedule.tsx
 import React, { useState, useEffect } from "react";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Search, CheckCircle2, Play, Calendar } from "lucide-react";
+import {
+  Search,
+  Play,
+  Calendar,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getSharedAppointments } from "../../utils/dataProvider";
-import { useAuth } from "../../context/AuthContext"; // Import Auth để lấy MaCN
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "../../context/AuthContext";
+import { servicesApi } from "../../api/services";
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 export const StaffSchedule: React.FC = () => {
   const navigate = useNavigate();
-  const { profile } = useAuth(); // Lấy thông tin Staff đang login
+  const { profile } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [appointments, setAppointments] = useState<any[]>([]);
+  const debouncedSearch = useDebounce(searchTerm, 500);
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
-  const refreshData = () => {
-    const all = getSharedAppointments();
+  const { data, isLoading } = useQuery({
+    queryKey: ["staff-bookings", profile?.MaCN, page, debouncedSearch],
+    queryFn: async () => {
+      const res = await servicesApi.getBranchAppointments({
+        page,
+        limit,
+        search: debouncedSearch,
+      });
 
-    // --- LOGIC LỌC CHI NHÁNH ---
-    // Chỉ lấy lịch hẹn có MaCN trùng với MaCN của nhân viên
-    const branchAppointments = all.filter((appt: any) => {
-      // Nếu là ADMIN thì cho xem hết (tùy chọn), còn NV thì bắt buộc lọc
-      if (profile?.Role === "ADMIN") return true;
-      return appt.MaCN === profile?.MaCN;
+      if (res.data && res.pagination) return res;
+      return {
+        data: Array.isArray(res) ? res : [],
+        pagination: { totalPages: 1 },
+      };
+    },
+    refetchInterval: 15000,
+  });
+
+  const appointments = data?.data || [];
+  const totalPages = data?.pagination?.totalPages || 1;
+
+  const formatTime = (isoString: string) => {
+    if (!isoString) return "--:--";
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     });
-
-    setAppointments(branchAppointments);
   };
 
-  useEffect(() => {
-    refreshData();
-    window.addEventListener("storage", refreshData);
-    window.addEventListener("local-storage-update", refreshData);
-    return () => {
-      window.removeEventListener("storage", refreshData);
-      window.removeEventListener("local-storage-update", refreshData);
-    };
-  }, [profile]); // Chạy lại khi profile thay đổi
-
-  // Lọc theo từ khóa tìm kiếm
-  const filteredAppointments = appointments.filter(
-    (apt) =>
-      apt.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      apt.petName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const formatDate = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+  };
 
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="p-6 h-full flex flex-col fade-in">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -54,128 +81,196 @@ export const StaffSchedule: React.FC = () => {
           <p className="text-slate-500 text-sm">
             Khu vực:{" "}
             <span className="font-bold text-primary">
-              {profile?.MaCN === "CN01"
-                ? "Chi nhánh Quận 1"
-                : profile?.MaCN === "CN02"
-                ? "Chi nhánh Quận 7"
-                : "Toàn hệ thống"}
+              {profile?.TenCN || "Chi nhánh"}
             </span>
           </p>
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none w-64"
-            placeholder="Tìm bệnh nhân..."
+            className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none w-64 focus:ring-2 focus:ring-primary/20 transition-all"
+            placeholder="Tìm tên khách, thú cưng..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
           />
+          {searchTerm !== debouncedSearch && (
+            <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-primary" />
+          )}
         </div>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 flex-1 overflow-hidden flex flex-col">
         <div className="overflow-y-auto flex-1">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr>
-                <th className="p-4 text-sm font-semibold text-slate-600">
-                  Giờ
-                </th>
-                <th className="p-4 text-sm font-semibold text-slate-600">
-                  Khách hàng
-                </th>
-                <th className="p-4 text-sm font-semibold text-slate-600">
-                  Dịch vụ
-                </th>
-                <th className="p-4 text-sm font-semibold text-slate-600">
-                  Bác sĩ
-                </th>
-                <th className="p-4 text-sm font-semibold text-slate-600">
-                  Trạng thái
-                </th>
-                <th className="p-4 text-sm font-semibold text-slate-600 text-right">
-                  Hành động
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredAppointments.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin mb-2 text-primary" />
+              <p>Đang tải lịch hẹn...</p>
+            </div>
+          ) : (
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="p-12 text-center text-slate-400 italic"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <Calendar className="w-10 h-10 text-slate-200" />
-                      <span>Chưa có lịch hẹn nào tại chi nhánh này.</span>
-                    </div>
-                  </td>
+                  <th className="p-4 text-sm font-semibold text-slate-600">
+                    Thời gian
+                  </th>
+                  <th className="p-4 text-sm font-semibold text-slate-600">
+                    Khách hàng
+                  </th>
+                  <th className="p-4 text-sm font-semibold text-slate-600">
+                    Dịch vụ
+                  </th>
+                  <th className="p-4 text-sm font-semibold text-slate-600">
+                    Bác sĩ
+                  </th>
+                  <th className="p-4 text-sm font-semibold text-slate-600">
+                    Trạng thái
+                  </th>
+                  <th className="p-4 text-sm font-semibold text-slate-600 text-right">
+                    Hành động
+                  </th>
                 </tr>
-              ) : (
-                filteredAppointments.map((apt) => (
-                  <tr
-                    key={apt.id}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="p-4 font-mono text-slate-500">{apt.time}</td>
-                    <td className="p-4">
-                      <p className="font-bold text-slate-800">
-                        {apt.patientName}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {apt.petName} ({apt.type})
-                      </p>
-                    </td>
-                    <td className="p-4">
-                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">
-                        {apt.service}
-                      </span>
-                    </td>
-                    <td className="p-4 text-sm text-slate-600">{apt.doctor}</td>
-                    <td className="p-4">
-                      {apt.status === "WAITING" && (
-                        <span className="text-orange-500 font-bold text-xs flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>{" "}
-                          Chờ khám
-                        </span>
-                      )}
-                      {apt.status === "COMPLETED" && (
-                        <span className="text-green-600 font-bold text-xs">
-                          Hoàn thành
-                        </span>
-                      )}
-                      {apt.status === "PENDING" && (
-                        <span className="text-gray-400 font-bold text-xs">
-                          Chưa đến
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      {apt.status !== "COMPLETED" ? (
-                        <Button
-                          size="sm"
-                          onClick={() => navigate(`/staff/exam/${apt.id}`)}
-                          className={
-                            apt.status === "WAITING"
-                              ? "shadow-md shadow-primary/20"
-                              : "opacity-50"
-                          }
-                        >
-                          <Play className="w-3 h-3 mr-1" /> Khám
-                        </Button>
-                      ) : (
-                        <span className="text-green-600 flex items-center justify-end text-sm font-bold">
-                          <CheckCircle2 className="w-4 h-4 mr-1" /> Xong
-                        </span>
-                      )}
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {appointments.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-12 text-center text-slate-400 italic"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <Calendar className="w-10 h-10 text-slate-200" />
+                        <span>Chưa có lịch hẹn nào phù hợp.</span>
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  appointments.map((apt: any) => (
+                    <tr
+                      key={apt.MaLichHen}
+                      className="hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="p-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-700 text-lg font-mono">
+                            {formatTime(apt.ThoiGianHen)}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {formatDate(apt.ThoiGianHen)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <p className="font-bold text-slate-800">
+                          {apt.TenKhachHang}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {apt.TenTC} <span className="text-slate-300">|</span>{" "}
+                          {apt.LoaiTC}
+                        </p>
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                            apt.LoaiDichVu === "Tiêm phòng"
+                              ? "bg-purple-50 text-purple-700"
+                              : "bg-blue-50 text-blue-700"
+                          }`}
+                        >
+                          {apt.LoaiDichVu}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-slate-600">
+                        {apt.TenBacSi || "---"}
+                      </td>
+                      <td className="p-4">
+                        {/* Logic hiển thị trạng thái giữ nguyên */}
+                        {apt.TrangThai === "WAITING" && (
+                          <span className="text-orange-500 font-bold text-xs flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                            Chờ khám
+                          </span>
+                        )}
+                        {apt.TrangThai === "COMPLETED" && (
+                          <span className="text-green-600 font-bold text-xs">
+                            ✓ Hoàn thành
+                          </span>
+                        )}
+                        {apt.TrangThai === "PENDING" && (
+                          <span className="text-gray-400 font-bold text-xs">
+                            Chưa đến
+                          </span>
+                        )}
+                        {apt.TrangThai === "CANCELLED" && (
+                          <span className="text-red-400 font-bold text-xs">
+                            Đã hủy
+                          </span>
+                        )}
+                        {apt.TrangThai === "WAITING_PAYMENT" && (
+                          <span className="text-blue-500 font-bold text-xs flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            Chờ thanh toán
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right">
+                        {apt.TrangThai !== "COMPLETED" &&
+                        apt.TrangThai !== "CANCELLED" &&
+                        apt.TrangThai !== "WAITING_PAYMENT" ? (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              navigate(`/staff/exam/${apt.MaLichHen}`)
+                            }
+                            className={
+                              apt.TrangThai === "WAITING"
+                                ? "shadow-md shadow-primary/20 animate-pulse"
+                                : "opacity-80 hover:opacity-100"
+                            }
+                          >
+                            <Play className="w-3 h-3 mr-1" /> Khám
+                          </Button>
+                        ) : (
+                          <span className="text-slate-300 text-xs italic">
+                            Không khả dụng
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
+            <Button
+              variant="ghost"
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              size="sm"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" /> Trước
+            </Button>
+            <span className="text-sm text-gray-600 font-medium">
+              Trang {page} / {totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              size="sm"
+            >
+              Sau <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

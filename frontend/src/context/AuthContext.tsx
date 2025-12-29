@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { UserProfile, UserRole } from "../types/schema";
-import { authApi } from "../api/authApi"; // <--- Dùng API
+import { authApi } from "../api/authApi";
 
 interface AuthContextType {
   token: string | null;
   profile: UserProfile | null;
   isLoading: boolean;
-  login: (token: string) => Promise<UserRole>;
+  login: (identifier: string, password?: string) => Promise<any>;
   logout: () => void;
 }
 
@@ -24,10 +24,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // ... trong AuthProvider
   useEffect(() => {
     const handleStorageChange = () => {
-      // Khi dataProvider bắn tín hiệu, đọc lại localStorage ngay
       const savedProfile = localStorage.getItem("pcx_profile");
       if (savedProfile) {
         setProfile(JSON.parse(savedProfile));
@@ -43,23 +41,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  const login = async (inputIdentifier: string): Promise<UserRole> => {
+  const login = async (
+    inputIdentifier: string,
+    password?: string
+  ): Promise<any> => {
     setIsLoading(true);
     try {
-      setToken(inputIdentifier);
-      localStorage.setItem("pcx_token", inputIdentifier);
+      const data = await authApi.login(inputIdentifier, password);
 
-      // GỌI API LOGIN
-      const foundProfile: any = await authApi.login(inputIdentifier);
+      const accessToken = data.token;
 
-      setProfile(foundProfile);
-      localStorage.setItem("pcx_profile", JSON.stringify(foundProfile));
-      return foundProfile!.Role;
+      const userProfile = {
+        MaND: data.MaND,
+        HoTen: data.HoTen,
+        Email: data.Email,
+        SDT: data.SDT,
+        Role: data.Role,
+        MaCN: data.MaCN,
+        DiemTichLuy: data.DiemTichLuy,
+      };
+
+      setToken(accessToken);
+      setProfile(userProfile);
+
+      localStorage.setItem("pcx_token", accessToken);
+      localStorage.setItem("pcx_profile", JSON.stringify(userProfile));
+
+      return data.Role;
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Đăng nhập thất bại";
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
   };
-
   const logout = () => {
     setToken(null);
     setProfile(null);

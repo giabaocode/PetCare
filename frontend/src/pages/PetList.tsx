@@ -1,6 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { petsApi } from "../api/pets";
+
+import { usersApi } from "../api/userApi";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { PetCard } from "../components/features/PetCard";
@@ -13,11 +14,11 @@ export const PetList: React.FC = () => {
   const { data: pets = [], isLoading } = useQuery({
     queryKey: ["pets", profile?.MaKH],
     queryFn: async () => {
-      if (!profile?.MaKH) return [];
-      const res = await petsApi.getAll(profile.MaKH);
+      const res = await usersApi.getMyPets();
       return (res as any).data || res || [];
     },
-    enabled: !!profile?.MaKH,
+
+    enabled: !!profile,
   });
 
   if (isLoading)

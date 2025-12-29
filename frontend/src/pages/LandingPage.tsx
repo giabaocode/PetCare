@@ -49,7 +49,7 @@ export const LandingPage: React.FC = () => {
             </h1>
             <p className="text-lg text-slate-600 mb-8 leading-relaxed max-w-lg">
               Đặt lịch khám bệnh, tiêm phòng và theo dõi sức khỏe thú cưng dễ
-              dàng với mạng lưới 10 chi nhánh PetCareX trên toàn quốc.
+              dàng với mạng lưới nhiều chi nhánh PetCareX trên toàn quốc.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Link to="/register">
@@ -68,10 +68,7 @@ export const LandingPage: React.FC = () => {
             </div>
 
             <div className="mt-10 flex items-center gap-8 text-sm font-medium text-slate-500">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500"></div> 10 Chi
-                nhánh
-              </div>
+              <div className="flex items-center gap-2"></div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div> Bác sĩ
                 chuyên môn cao

@@ -22,8 +22,9 @@ export const Login: React.FC = () => {
 
   const onSubmit = async (data: any) => {
     const username = data.identifier.trim();
+    const password = data.password;
     try {
-      const role = await login(username);
+      const role = await login(username, password);
       switch (role) {
         case "ADMIN":
           navigate("/staff/dashboard");
@@ -41,17 +42,6 @@ export const Login: React.FC = () => {
     } catch (e) {
       alert("Đăng nhập thất bại");
     }
-  };
-
-  const quickLogin = (type: string) => {
-    const mockData: any = {
-      admin: { identifier: "admin@petcare.com", password: "123" },
-      doctor1: { identifier: "bs.a@petcare.com", password: "123" },
-      doctor2: { identifier: "bs.c@petcare.com", password: "123" },
-      reception1: { identifier: "letan@petcare.com", password: "123" },
-      reception2: { identifier: "letan7@petcare.com", password: "123" },
-    };
-    if (mockData[type]) onSubmit(mockData[type]);
   };
 
   return (
@@ -120,60 +110,6 @@ export const Login: React.FC = () => {
                 Đăng nhập <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </form>
-
-            <div className="my-8 flex items-center gap-4">
-              <div className="h-px bg-slate-200 flex-1"></div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Demo Mode (Click nhanh)
-              </span>
-              <div className="h-px bg-slate-200 flex-1"></div>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => quickLogin("admin")}
-                className="w-full p-3 border rounded-xl hover:bg-red-50 text-xs font-bold text-slate-600 flex items-center justify-center gap-2 border-slate-200 hover:border-red-200"
-              >
-                <ShieldAlert className="w-4 h-4 text-red-500" /> Quản trị viên
-                (Xem tất cả)
-              </button>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => quickLogin("reception1")}
-                  className="p-3 border rounded-xl hover:bg-orange-50 text-xs font-bold text-slate-600 flex items-center justify-center gap-2 border-slate-200 hover:border-orange-200"
-                >
-                  <ConciergeBell className="w-4 h-4 text-orange-500" /> Lễ tân
-                  (Q1)
-                </button>
-                <button
-                  onClick={() => quickLogin("reception2")}
-                  className="p-3 border rounded-xl hover:bg-orange-50 text-xs font-bold text-slate-600 flex items-center justify-center gap-2 border-slate-200 hover:border-orange-200"
-                >
-                  <ConciergeBell className="w-4 h-4 text-orange-500" /> Lễ tân
-                  (Q7)
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => quickLogin("doctor1")}
-                  className="p-3 border border-blue-200 bg-blue-50 rounded-xl hover:bg-blue-100 flex flex-col items-center justify-center gap-1"
-                >
-                  <div className="flex items-center gap-1 text-blue-700 font-bold text-xs">
-                    <Stethoscope className="w-4 h-4" /> Bác sĩ (Q1)
-                  </div>
-                </button>
-                <button
-                  onClick={() => quickLogin("doctor2")}
-                  className="p-3 border border-purple-200 bg-purple-50 rounded-xl hover:bg-purple-100 flex flex-col items-center justify-center gap-1"
-                >
-                  <div className="flex items-center gap-1 text-purple-700 font-bold text-xs">
-                    <MapPin className="w-4 h-4" /> Bác sĩ (Q7)
-                  </div>
-                </button>
-              </div>
-            </div>
 
             <p className="mt-10 text-center text-sm text-slate-500">
               Bạn chưa có tài khoản?{" "}

@@ -1,35 +1,29 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { servicesApi } from "../../api/services";
-import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { SuccessModal } from "../ui/SuccessModal";
-import { Modal } from "../ui/Modal";
-import { ErrorModal } from "../ui/ErrorModal"; // Dùng ErrorModal cho đẹp
+import { ErrorModal } from "../ui/ErrorModal";
 import { ArrowRight, ArrowLeft, Calendar } from "lucide-react";
-import { db } from "../../utils/dataProvider";
+
+import { servicesApi } from "../../api/services";
+
+import { packageApi } from "../../api/packagesApi";
+import { usersApi } from "../../api/userApi";
+import { useAuth } from "../../context/AuthContext";
 
 export const BookingWizard: React.FC = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
-  // State Modals
   const [showSuccess, setShowSuccess] = useState(false);
-  const [showError, setShowError] = useState(false); // State hiển thị modal lỗi
-  const [errorMsg, setErrorMsg] = useState(""); // Nội dung lỗi
+  const [showError, setShowError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    trigger,
-    formState: { errors },
-  } = useForm({
+  const { register, handleSubmit, watch, trigger } = useForm({
     defaultValues: {
       maCN: "",
       serviceType: "EXAMINATION",
@@ -41,45 +35,54 @@ export const BookingWizard: React.FC = () => {
     },
   });
 
-  // Watchers
   const selectedBranch = watch("maCN");
   const selectedService = watch("serviceType");
   const selectedDateTime = watch("dateTime");
 
-  // State dữ liệu động
-  const [availableDoctors, setAvailableDoctors] = useState<any[]>([]);
-  const [availableVaccines, setAvailableVaccines] = useState<any[]>([]);
-  const [myPets, setMyPets] = useState<any[]>([]);
+  const { data: branches = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: async () => {
+      const res = await servicesApi.getAllBranches();
+      return Array.isArray(res) ? res : (res as any).data || [];
+    },
+  });
 
-  useEffect(() => {
-    const inventory = db.getInventory();
-    const vaccines = inventory.filter(
-      (i: any) => i.category === "Vaccine" && i.stock > 0
-    );
-    setAvailableVaccines(vaccines);
-  }, []);
+  const { data: myPets = [] } = useQuery({
+    queryKey: ["my-pets"],
+    queryFn: async () => {
+      const res = await usersApi.getMyPets();
+      return Array.isArray(res) ? res : (res as any).data || res || [];
+    },
+    enabled: true,
+  });
 
-  useEffect(() => {
-    if (profile?.MaKH) {
-      const allPets = db.getPets();
-      setMyPets(allPets.filter((p: any) => p.MaKH === profile.MaKH));
-    }
-  }, [profile]);
+  const { data: availableVaccines = [] } = useQuery({
+    queryKey: ["packages"],
+    queryFn: async () => {
+      const res = await packageApi.getAll();
 
-  useEffect(() => {
-    if (selectedBranch) {
-      const allUsers = db.getUsers();
-      const doctors = allUsers.filter(
-        (u: any) => u.Role === "DOCTOR" && u.MaCN === selectedBranch
-      );
-      setAvailableDoctors(doctors);
-      setValue("maNVPhuTrach", "");
-    } else {
-      setAvailableDoctors([]);
-    }
-  }, [selectedBranch, setValue]);
+      const data = Array.isArray(res) ? res : (res as any).data || [];
 
-  // --- HÀM CHUYỂN BƯỚC ĐÃ SỬA ---
+      return data.map((pkg: any) => ({
+        id: pkg.MaGoi,
+        name: pkg.TenGoi,
+
+        price: pkg.GiaTien || 0,
+        stock: 999,
+      }));
+    },
+  });
+
+  const { data: availableDoctors = [] } = useQuery({
+    queryKey: ["doctors", selectedBranch],
+    queryFn: async () => {
+      if (!selectedBranch) return [];
+      const res = await usersApi.getDoctorsByBranch(selectedBranch);
+      return res || [];
+    },
+    enabled: !!selectedBranch,
+  });
+
   const handleNextStep = async () => {
     const isValid = await trigger(["maCN", "maTC", "dateTime"]);
 
@@ -91,7 +94,6 @@ export const BookingWizard: React.FC = () => {
     if (isValid && isVaccineValid) {
       setStep(2);
     } else {
-      // FIX: Thay alert bằng Error Modal
       setErrorMsg("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
       setShowError(true);
     }
@@ -99,30 +101,23 @@ export const BookingWizard: React.FC = () => {
 
   const mutation = useMutation({
     mutationFn: async (d: any) => {
-      let symptomText = d.trieuChung;
-      if (d.serviceType === "VACCINATION" && d.maVaccine) {
-        const v = availableVaccines.find((vac) => vac.id === d.maVaccine);
-        symptomText = `Tiêm phòng: ${v?.name || d.maVaccine}`;
-      }
+      const isoDateTime = new Date(d.dateTime).toISOString();
 
       await servicesApi.createBookingFull({
         ...d,
-        trieuChung: symptomText,
+        dateTime: isoDateTime,
+
         MaKH: profile?.MaKH,
       });
     },
     onSuccess: () => setShowSuccess(true),
     onError: (err: any) => {
-      // Khi API lỗi cũng hiện Modal
-      setErrorMsg(err.message || "Có lỗi xảy ra khi đặt lịch");
+      setErrorMsg(
+        err.response?.data?.message || err.message || "Có lỗi xảy ra"
+      );
       setShowError(true);
     },
   });
-
-  const branches = [
-    { id: "CN01", name: "PetCare Quận 1 (Chính)" },
-    { id: "CN02", name: "PetCare Quận 7" },
-  ];
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-2xl shadow-sm border border-gray-100 my-8">
@@ -156,12 +151,12 @@ export const BookingWizard: React.FC = () => {
               </label>
               <select
                 {...register("maCN", { required: true })}
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-white"
               >
                 <option value="">-- Chọn phòng khám --</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
+                {branches.map((b: any) => (
+                  <option key={b.MaCN} value={b.MaCN}>
+                    {b.TenCN} ({b.DiaChi})
                   </option>
                 ))}
               </select>
@@ -178,6 +173,7 @@ export const BookingWizard: React.FC = () => {
                   type="datetime-local"
                   {...register("dateTime", { required: true })}
                   className="pl-10 w-full"
+                  min={new Date().toISOString().slice(0, 16)}
                 />
               </div>
             </div>
@@ -190,14 +186,20 @@ export const BookingWizard: React.FC = () => {
               <select
                 {...register("maNVPhuTrach")}
                 disabled={!selectedBranch}
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
               >
-                <option value="">-- Bác sĩ chỉ định --</option>
-                {availableDoctors.map((doc) => (
-                  <option key={doc.MaND} value={doc.HoTen}>
-                    {doc.HoTen}
+                <option value="">-- Chỉ định tại quầy --</option>
+                {availableDoctors.length > 0 ? (
+                  availableDoctors.map((doc: any) => (
+                    <option key={doc.MaND} value={doc.MaND}>
+                      BS. {doc.HoTen}
+                    </option>
+                  ))
+                ) : selectedBranch ? (
+                  <option disabled>
+                    Không tìm thấy bác sĩ tại chi nhánh này
                   </option>
-                ))}
+                ) : null}
               </select>
             </div>
 
@@ -208,18 +210,23 @@ export const BookingWizard: React.FC = () => {
               </label>
               <select
                 {...register("maTC", { required: true })}
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-white"
               >
                 <option value="">-- Chọn bé --</option>
-                {myPets.map((p) => (
+                {myPets.map((p: any) => (
                   <option key={p.MaTC} value={p.MaTC}>
-                    {p.TenTC} ({p.Loai})
+                    {p.TenTC} ({p.Loai} - {p.Giong})
                   </option>
                 ))}
               </select>
+              {myPets.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">
+                  Bạn chưa có hồ sơ thú cưng nào. Vui lòng tạo hồ sơ trước.
+                </p>
+              )}
             </div>
 
-            {/* Loại dịch vụ */}
+            {/* Chọn Loại Dịch Vụ */}
             <div className="grid grid-cols-2 gap-4">
               <label
                 className={`p-4 border rounded-xl cursor-pointer text-center transition-all ${
@@ -253,36 +260,44 @@ export const BookingWizard: React.FC = () => {
               </label>
             </div>
 
-            {/* Form động */}
-            {selectedService === "EXAMINATION" ? (
-              <div>
+            {/* Hiển thị Dropdown Gói Tiêm */}
+            {selectedService === "VACCINATION" && (
+              <div className="animate-fade-in">
                 <label className="block font-medium text-gray-700 mb-2">
-                  Triệu chứng / Ghi chú
-                </label>
-                <textarea
-                  {...register("trieuChung")}
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary h-24"
-                  placeholder="VD: Bé bỏ ăn 2 ngày nay..."
-                ></textarea>
-              </div>
-            ) : (
-              <div>
-                <label className="block font-medium text-gray-700 mb-2">
-                  Chọn loại Vaccine (Kho) (*)
+                  Chọn Gói Tiêm / Vaccine (*)
                 </label>
                 <select
                   {...register("maVaccine", { required: true })}
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
-                  <option value="">-- Chọn vaccine --</option>
-                  {availableVaccines.map((v) => (
+                  <option value="">-- Chọn gói tiêm --</option>
+                  {availableVaccines.map((v: any) => (
                     <option key={v.id} value={v.id}>
-                      {v.name} (Giá: {v.price.toLocaleString()}đ)
+                      {v.name}{" "}
+                      {v.price > 0 ? `(Giá: ${v.price.toLocaleString()}đ)` : ""}
                     </option>
                   ))}
                 </select>
               </div>
             )}
+
+            {/* Luôn hiển thị ô Ghi chú/Triệu chứng */}
+            <div>
+              <label className="block font-medium text-gray-700 mb-2 mt-4">
+                {selectedService === "VACCINATION"
+                  ? "Ghi chú thêm (Tình trạng sức khỏe)"
+                  : "Triệu chứng / Lý do khám"}
+              </label>
+              <textarea
+                {...register("trieuChung")}
+                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary h-24"
+                placeholder={
+                  selectedService === "VACCINATION"
+                    ? "VD: Bé đang khỏe mạnh, không sốt, ăn uống bình thường..."
+                    : "VD: Bé bỏ ăn 2 ngày nay, hay nôn ói..."
+                }
+              ></textarea>
+            </div>
 
             <div className="pt-4 flex justify-end">
               <Button type="button" onClick={handleNextStep}>
@@ -301,9 +316,10 @@ export const BookingWizard: React.FC = () => {
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+              {/* Review Info */}
               <div className="flex justify-between border-b border-dashed pb-3">
                 <span className="text-gray-500">Thời gian khám:</span>
-                <span className="font-bold text-primary text-lg">
+                <span className="font-bold text-primary text-lg text-right">
                   {selectedDateTime
                     ? new Date(selectedDateTime).toLocaleString("vi-VN", {
                         dateStyle: "full",
@@ -312,43 +328,55 @@ export const BookingWizard: React.FC = () => {
                     : "Chưa chọn"}
                 </span>
               </div>
+
               <div className="flex justify-between">
                 <span className="text-gray-500">Chi nhánh:</span>
-                <span className="font-medium text-gray-900">
-                  {branches.find((b) => b.id === watch("maCN"))?.name}
+                <span className="font-medium text-gray-900 text-right">
+                  {branches.find((b: any) => b.MaCN === watch("maCN"))?.TenCN}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Bác sĩ:</span>
-                <span className="font-medium text-gray-900">
-                  {watch("maNVPhuTrach") || "Chỉ định sau"}
-                </span>
-              </div>
+
               <div className="flex justify-between">
                 <span className="text-gray-500">Thú cưng:</span>
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-gray-900 text-right">
                   {
-                    myPets.find((p) => String(p.MaTC) === String(watch("maTC")))
-                      ?.TenTC
+                    myPets.find(
+                      (p: any) => String(p.MaTC) === String(watch("maTC"))
+                    )?.TenTC
                   }
                 </span>
               </div>
+
               <div className="flex justify-between">
                 <span className="text-gray-500">Dịch vụ:</span>
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-gray-900 text-right">
                   {watch("serviceType") === "EXAMINATION"
                     ? "Khám bệnh"
                     : "Tiêm phòng"}
                 </span>
               </div>
+
               {watch("serviceType") === "VACCINATION" && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Vaccine:</span>
-                  <span className="font-medium text-gray-900">
+                  <span className="text-gray-500">Gói Tiêm:</span>
+                  <span className="font-medium text-gray-900 text-right">
                     {
-                      availableVaccines.find((v) => v.id === watch("maVaccine"))
-                        ?.name
+                      availableVaccines.find(
+                        (v: any) => v.id === watch("maVaccine")
+                      )?.name
                     }
+                  </span>
+                </div>
+              )}
+
+              {/* Hiển thị ghi chú nếu có */}
+              {watch("trieuChung") && (
+                <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-dashed">
+                  <span className="text-gray-500 text-sm">
+                    Ghi chú/Triệu chứng:
+                  </span>
+                  <span className="font-medium text-gray-900 italic text-sm">
+                    "{watch("trieuChung")}"
                   </span>
                 </div>
               )}
@@ -360,10 +388,15 @@ export const BookingWizard: React.FC = () => {
                 variant="ghost"
                 onClick={() => setStep(1)}
                 className="flex-1"
+                disabled={mutation.isPending}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại sửa
               </Button>
-              <Button type="submit" className="flex-[2]">
+              <Button
+                type="submit"
+                className="flex-[2]"
+                isLoading={mutation.isPending}
+              >
                 Xác nhận Đặt lịch
               </Button>
             </div>
@@ -371,7 +404,6 @@ export const BookingWizard: React.FC = () => {
         )}
       </form>
 
-      {/* Modal Thành Công */}
       <SuccessModal
         isOpen={showSuccess}
         onClose={() => {
@@ -382,7 +414,6 @@ export const BookingWizard: React.FC = () => {
         message="Chúng tôi đã nhận được yêu cầu. Vui lòng đến đúng giờ."
       />
 
-      {/* Modal Báo Lỗi (Thay cho alert) */}
       <ErrorModal
         isOpen={showError}
         onClose={() => setShowError(false)}

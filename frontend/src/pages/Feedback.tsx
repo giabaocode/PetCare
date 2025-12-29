@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation } from "@tanstack/react-query";
-import { userDataApi } from "../api/user-data";
+
+import { usersApi } from "../api/userApi";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/Button";
 import { useNavigate } from "react-router-dom";
 import { Star, MessageSquare } from "lucide-react";
 
-// Component Star Rating nhỏ
 const StarRating = ({
   label,
   value,
@@ -61,15 +61,18 @@ export const Feedback: React.FC = () => {
 
   const mutation = useMutation({
     mutationFn: (d: any) =>
-      userDataApi.sendFeedback({
+      usersApi.sendFeedback({
         ...d,
         MaKH: profile?.MaKH,
+
         MaCN: "CN01",
-        NgayDanhGia: new Date().toISOString(),
       }),
     onSuccess: () => {
       alert("Cảm ơn phản hồi của bạn!");
       navigate("/dashboard");
+    },
+    onError: (err) => {
+      alert("Lỗi gửi đánh giá. Vui lòng thử lại!");
     },
   });
 
@@ -121,6 +124,7 @@ export const Feedback: React.FC = () => {
             type="submit"
             className="w-full h-12 text-lg rounded-xl shadow-lg shadow-primary/20"
             disabled={mutation.isPending}
+            isLoading={mutation.isPending}
           >
             Gửi Đánh giá
           </Button>

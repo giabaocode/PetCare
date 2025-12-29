@@ -1,83 +1,40 @@
-import { db } from "../utils/dataProvider";
+// Đảm bảo đường dẫn này đúng với project của bạn (thường là axiosClient hoặc apiClient)
+import api from "../utils/apiClient";
 
-// Mock Data Gói (Nên để ở đây thay vì hardcode trong Component)
-const MOCK_PACKAGES = [
-  {
-    id: "PKG01",
-    name: "Gói Cơ Bản (Mèo)",
-    discount: "-5%",
-    price: 500000,
-    duration: "6 tháng",
-    durationMonth: 6,
-    features: ["Đầy đủ vaccine cơ bản", "Miễn phí 2 lần khám"],
-    benefits: { freeExamLimit: 2 },
-    TenGoi: "Gói Cơ Bản (Mèo)",
-    PhanTramGiam: 5,
-    ThoiHanThang: 6,
-  },
-  {
-    id: "PKG02",
-    name: "Gói Toàn Diện (Chó)",
-    discount: "-15%",
-    price: 1200000,
-    duration: "12 tháng",
-    durationMonth: 12,
-    features: ["Đầy đủ vaccine cơ bản", "Miễn phí 2 lần khám", "Giảm 10% Spa"],
-    benefits: { freeExamLimit: 2 },
-    TenGoi: "Gói Toàn Diện (Chó)",
-    PhanTramGiam: 15,
-    ThoiHanThang: 12,
-  },
-  {
-    id: "PKG03",
-    name: "Gói Sơ Sinh (Baby)",
-    discount: "-10%",
-    price: 800000,
-    duration: "3 tháng",
-    durationMonth: 3,
-    features: ["Đầy đủ vaccine cơ bản", "Miễn phí 2 lần khám", "Tặng sữa tắm"],
-    benefits: { freeExamLimit: 2 },
-    TenGoi: "Gói Sơ Sinh (Baby)",
-    PhanTramGiam: 10,
-    ThoiHanThang: 3,
-  },
-];
-
-export const packagesApi = {
-  // Lấy tất cả gói
-  getAll: async () => {
-    return MOCK_PACKAGES;
+export const packageApi = {
+  // Lấy danh sách gói (cho Booking Dropdown)
+  getAll: () => {
+    return api.get("/packages");
   },
 
-  // Lấy chi tiết 1 gói (Fix cho trang PackageDetail)
-  getOne: async (id: string | number) => {
-    // Map ID số (nếu có) sang ID chuỗi PKG0x
-    const pkgId = String(id).startsWith("PKG") ? id : `PKG0${id}`;
-    const pkg = MOCK_PACKAGES.find((p) => p.id === pkgId);
-    return pkg || null;
+  getOne: (id: string | number) => {
+    return api.get(`/packages/${id}`);
   },
 
-  // Mua gói
-  buyPackage: async (data: { MaTC: string; MaKH: string; Package: any }) => {
-    const expireDate = new Date();
-    expireDate.setMonth(expireDate.getMonth() + data.Package.durationMonth);
+  // Mua gói (chức năng phụ)
+  buyPackage: (data: {
+    MaTC: string;
+    MaKH: string;
+    Package: any;
+    maCN?: string;
+  }) => {
+    const payload = {
+      userId: data.MaKH,
+      petId: data.MaTC,
+      packageId: data.Package.id || data.Package.MaGoi,
+      // Lưu ý: Nếu gói không có giá, mặc định là 0
+      totalAmount: data.Package.price || data.Package.GiaBan || 0,
+      maCN: data.maCN,
+    };
 
-    return db.activatePackage({
-      MaTC: data.MaTC,
-      MaKH: data.MaKH,
-      PackageID: data.Package.id,
-      PackageName: data.Package.name,
-      startDate: new Date().toISOString(),
-      expireDate: expireDate.toISOString(),
-      benefits: data.Package.benefits,
-    });
+    return api.post("/packages/buy", payload);
   },
 
-  checkActivePackage: async (maTC: string) => {
-    return db.checkPackageStatus(maTC);
+  checkActivePackage: (maTC: string) => {
+    return api.get(`/packages/check/${maTC}`);
   },
 
-  useBenefit: async (maTC: string) => {
-    return db.usePackageBenefit(maTC);
+  useBenefit: (maTC: string) => {
+    return api.post("/packages/use-benefit", { petId: maTC });
   },
 };

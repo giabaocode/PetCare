@@ -1,28 +1,23 @@
-import { db } from "../utils/dataProvider";
+import api from "../utils/apiClient";
 
 export const invoicesApi = {
-  // Tạo hóa đơn
-  create: async (invoiceData: any) => {
-    return db.addInvoice(invoiceData);
-  },
-
-  // Lấy danh sách (Có hỗ trợ lọc theo Khách hàng)
   getAll: async (maKH?: string) => {
-    // Giả lập delay mạng nhẹ
-    await new Promise((r) => setTimeout(r, 200));
-
-    const allInvoices = db.getInvoices();
-    if (maKH) {
-      return allInvoices.filter((inv: any) => inv.MaKH === maKH);
-    }
-    return allInvoices;
+    const response = await api.get("/invoices/my-history");
+    return response.data;
   },
 
-  // Lấy chi tiết 1 hóa đơn
-  getOne: async (id: number | string) => {
-    const all = db.getInvoices();
-    // Chuyển về String để so sánh chính xác "123" với 123
-    const invoice = all.find((inv: any) => String(inv.MaHD) === String(id));
-    return invoice || null;
+  getOne: async (id: string | number) => {
+    const response = await api.get(`/invoices/${id}`);
+    return response.data;
+  },
+
+  getByBookingId: async (bookingId: string) => {
+    const response = await api.get(`/invoices/booking/${bookingId}`);
+    return response.data;
+  },
+
+  payInvoice: async (id: string) => {
+    const response = await api.post(`/invoices/${id}/pay`);
+    return response.data;
   },
 };

@@ -1,29 +1,29 @@
-// src/api/pets.ts
-import { db } from "../utils/dataProvider";
+import api from "../utils/apiClient";
 
 export const petsApi = {
-  getAll: async (maKH: string) => {
-    // Giả lập delay mạng
-    await new Promise((r) => setTimeout(r, 300));
-    const allPets = db.getPets();
-    // Lọc pet của user hiện tại
-    const userPets = allPets.filter((p: any) => p.MaKH === maKH);
-    return { data: userPets }; // Return structure { data: [] } để khớp code cũ
+  getAll: async () => {
+    const response = await api.get("/pets");
+    return response.data;
   },
 
-  getOne: async (id: number) => {
-    const allPets = db.getPets();
-    const pet = allPets.find((p: any) => Number(p.MaTC) === Number(id));
-    return pet ? [pet] : [];
+  getOne: async (id: string) => {
+    const response = await api.get(`/pets/${id}`);
+
+    return response.data;
   },
 
   create: async (data: any) => {
-    console.log("API: Create Pet", data);
-    db.addPet(data);
-    return { status: 201 };
+    const response = await api.post("/pets", data);
+    return response.data;
   },
 
-  // Các hàm update/delete giữ nguyên mock hoặc implement tương tự
-  update: async () => ({ status: 200 }),
-  delete: async () => ({ status: 200 }),
+  update: async (id: string, data: any) => {
+    const response = await api.put(`/pets/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/pets/${id}`);
+    return response.data;
+  },
 };

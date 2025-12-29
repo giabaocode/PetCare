@@ -7,9 +7,16 @@ import routes from "./routes";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
-app.use(cors());
+// backend/src/index.ts
+app.use(
+  cors({
+    origin: "*", // Cho phép mọi nguồn (hoặc điền "http://localhost:5173")
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Mount all routes under the /api path
@@ -20,5 +27,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });

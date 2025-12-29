@@ -1,59 +1,113 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { userDataApi } from "../api/user-data";
+import { servicesApi } from "../api/services";
 import { invoicesApi } from "../api/invoicesApi";
 import { useAuth } from "../context/AuthContext";
-import { Stethoscope, Syringe, FileText, CalendarDays } from "lucide-react";
+import {
+  Stethoscope,
+  Syringe,
+  FileText,
+  CalendarDays,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
+import { clsx } from "clsx";
+import { Button } from "../components/ui/Button";
 
 export const History: React.FC = () => {
-  const [tab, setTab] = useState<"EXAM" | "VACCINE" | "INVOICE">("EXAM");
+  const [tab, setTab] = useState<"UPCOMING" | "COMPLETED" | "INVOICE">(
+    "UPCOMING"
+  );
   const { profile } = useAuth();
 
-  const exams = useQuery({
-    queryKey: ["exams", profile?.MaKH],
-    queryFn: () => userDataApi.getKhamBenh(profile?.MaKH!).then((r) => r.data),
+  const { data: appointments = [], isLoading: isLoadingApt } = useQuery({
+    queryKey: ["my-appointments", profile?.MaKH],
+    queryFn: async () => {
+      const res = await servicesApi.getMyAppointments();
+      return (res as any).data || res || [];
+    },
     enabled: !!profile?.MaKH,
   });
-  const vaccines = useQuery({
-    queryKey: ["vaccines", profile?.MaKH],
-    queryFn: () => userDataApi.getTiemPhong(profile?.MaKH!).then((r) => r.data),
-    enabled: !!profile?.MaKH,
-  });
-  const invoices = useQuery({
+
+  const { data: invoices = [] } = useQuery({
     queryKey: ["invoices", profile?.MaKH],
-    queryFn: () => invoicesApi.getAll(profile?.MaKH!).then((r) => r.data),
+    queryFn: async () => {
+      const res = await invoicesApi.getAll();
+      return (res as any).data || res || [];
+    },
     enabled: !!profile?.MaKH,
   });
+
+  const upcomingList = appointments.filter((a: any) =>
+    ["PENDING", "CONFIRMED", "WAITING", "WAITING_PAYMENT"].includes(a.TrangThai)
+  );
+
+  const completedList = appointments.filter((a: any) =>
+    ["COMPLETED", "CANCELLED"].includes(a.TrangThai)
+  );
 
   const tabs = [
     {
-      id: "EXAM",
-      label: "Khám bệnh",
-      icon: Stethoscope,
-      color: "text-blue-500 bg-blue-50",
+      id: "UPCOMING",
+      label: "Sắp tới",
+      icon: Clock,
+      count: upcomingList.length,
     },
-    {
-      id: "VACCINE",
-      label: "Tiêm phòng",
-      icon: Syringe,
-      color: "text-green-500 bg-green-50",
-    },
-    {
-      id: "INVOICE",
-      label: "Hóa đơn",
-      icon: FileText,
-      color: "text-orange-500 bg-orange-50",
-    },
+    { id: "COMPLETED", label: "Lịch sử khám", icon: CheckCircle2, count: 0 },
+    { id: "INVOICE", label: "Hóa đơn", icon: FileText, count: 0 },
   ];
 
-  return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-8 text-gray-800">
-        Lịch sử hoạt động
-      </h1>
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return (
+          <span className="text-yellow-600 bg-yellow-50 px-2 py-1 rounded text-xs font-bold">
+            Chờ xác nhận
+          </span>
+        );
+      case "CONFIRMED":
+        return (
+          <span className="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs font-bold">
+            Đã xác nhận
+          </span>
+        );
+      case "WAITING":
+        return (
+          <span className="text-orange-600 bg-orange-50 px-2 py-1 rounded text-xs font-bold">
+            Đang chờ khám
+          </span>
+        );
+      case "WAITING_PAYMENT":
+        return (
+          <span className="text-purple-600 bg-purple-50 px-2 py-1 rounded text-xs font-bold">
+            Chờ thanh toán
+          </span>
+        );
+      case "COMPLETED":
+        return (
+          <span className="text-green-600 bg-green-50 px-2 py-1 rounded text-xs font-bold">
+            Hoàn thành
+          </span>
+        );
+      case "CANCELLED":
+        return (
+          <span className="text-red-600 bg-red-50 px-2 py-1 rounded text-xs font-bold">
+            Đã hủy
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
 
-      {/* Tabs Styled */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+  return (
+    <div className="p-6 max-w-4xl mx-auto pb-20">
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">Hồ sơ sức khỏe</h1>
+
+      {/* Tabs Header */}
+      <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-xl overflow-x-auto">
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -61,95 +115,145 @@ export const History: React.FC = () => {
             <button
               key={t.id}
               onClick={() => setTab(t.id as any)}
-              className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
+              className={clsx(
+                "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all text-sm whitespace-nowrap",
                 isActive
-                  ? `border-primary bg-white shadow-md`
-                  : "border-transparent bg-white/50 hover:bg-white"
-              }`}
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              )}
             >
-              <div className={`p-3 rounded-full mb-2 ${t.color}`}>
-                <Icon className="w-6 h-6" />
-              </div>
-              <span
-                className={`font-bold ${
-                  isActive ? "text-gray-800" : "text-gray-500"
-                }`}
-              >
-                {t.label}
-              </span>
+              <Icon className="w-4 h-4" />
+              {t.label}
+              {t.count > 0 && (
+                <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full ml-1">
+                  {t.count}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Timeline Content */}
-      <div className="space-y-6">
-        {/* EXAMS */}
-        {tab === "EXAM" &&
-          exams.data?.map((i: any) => (
-            <div key={i.MaDV} className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <div className="w-3 h-3 rounded-full bg-blue-500 mt-2"></div>
-                <div className="w-0.5 flex-1 bg-gray-200 my-1"></div>
-              </div>
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex-1 hover:shadow-md transition">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="font-bold text-gray-800">
-                    {new Date(i.NgayKham).toLocaleDateString("vi-VN")}
-                  </div>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg font-medium">
-                    Khám bệnh
-                  </span>
-                </div>
-                <p className="text-gray-600 mb-1">
-                  <span className="font-medium text-gray-900">
-                    Triệu chứng:
-                  </span>{" "}
-                  {i.TrieuChung}
+      {/* Content */}
+      <div className="space-y-4">
+        {/* TAB UPCOMING */}
+        {tab === "UPCOMING" && (
+          <div>
+            {upcomingList.length === 0 ? (
+              <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-gray-200">
+                <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">
+                  Bạn không có lịch hẹn nào sắp tới.
                 </p>
-                {i.ChanDoan && (
-                  <p className="text-gray-600">
-                    <span className="font-medium text-gray-900">
-                      Chẩn đoán:
-                    </span>{" "}
-                    {i.ChanDoan}
-                  </p>
-                )}
+                <Button
+                  className="mt-4"
+                  onClick={() => (window.location.href = "/booking")}
+                >
+                  Đặt lịch ngay
+                </Button>
               </div>
-            </div>
-          ))}
-
-        {/* VACCINES */}
-        {tab === "VACCINE" &&
-          vaccines.data?.map((i: any) => (
-            <div key={i.MaDV} className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <div className="w-3 h-3 rounded-full bg-green-500 mt-2"></div>
-                <div className="w-0.5 flex-1 bg-gray-200 my-1"></div>
-              </div>
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex-1 hover:shadow-md transition">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="font-bold text-gray-800">
-                    {new Date(i.NgayTiem).toLocaleDateString("vi-VN")}
+            ) : (
+              upcomingList.map((item: any) => (
+                <div
+                  key={item.MaLichHen}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 hover:border-primary/30 transition"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`p-2 rounded-lg ${
+                          item.LoaiDichVu === "VACCINATION"
+                            ? "bg-green-100 text-green-600"
+                            : "bg-blue-100 text-blue-600"
+                        }`}
+                      >
+                        {item.LoaiDichVu === "VACCINATION" ? (
+                          <Syringe className="w-5 h-5" />
+                        ) : (
+                          <Stethoscope className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800">
+                          {item.TenTC || "Thú cưng"}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {item.LoaiDichVu === "VACCINATION"
+                            ? "Tiêm phòng"
+                            : "Khám bệnh"}
+                        </p>
+                      </div>
+                    </div>
+                    {getStatusBadge(item.TrangThai)}
                   </div>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-lg font-medium">
-                    Tiêm phòng
-                  </span>
-                </div>
-                <p className="text-gray-600">
-                  <span className="font-medium text-gray-900">Liều lượng:</span>{" "}
-                  {i.LieuLuong || "Tiêu chuẩn"}
-                </p>
-              </div>
-            </div>
-          ))}
 
-        {/* INVOICES */}
+                  <div className="bg-slate-50 p-3 rounded-xl space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-gray-400" />
+                      <span className="font-semibold text-slate-800">
+                        {new Date(item.ThoiGianHen).toLocaleString("vi-VN", {
+                          dateStyle: "full",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-xs">Phòng khám:</span>
+                      <span>{item.TenCN}</span>
+                    </div>
+                    {item.TenBacSi && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 text-xs">Bác sĩ:</span>
+                        <span>{item.TenBacSi}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB COMPLETED */}
+        {tab === "COMPLETED" && (
+          <div>
+            {completedList.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">
+                Chưa có lịch sử khám.
+              </p>
+            ) : (
+              completedList.map((item: any) => (
+                <div
+                  key={item.MaLichHen}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 opacity-75 hover:opacity-100 transition"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="font-bold text-slate-700">{item.TenTC}</div>
+                    {getStatusBadge(item.TrangThai)}
+                  </div>
+                  <div className="text-sm text-gray-500 mb-2">
+                    {new Date(item.ThoiGianHen).toLocaleDateString("vi-VN")}
+                  </div>
+                  {(item.ChanDoan || item.TrieuChung) && (
+                    <div className="text-sm bg-gray-50 p-2 rounded-lg italic">
+                      "{item.ChanDoan || item.TrieuChung}"
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB INVOICE */}
         {tab === "INVOICE" &&
-          invoices.data?.map((i: any) => (
+          invoices.map((i: any) => (
             <div
-              key={i.MaHD}
-              className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between hover:border-primary/30 transition"
+              key={i.MaHD || i.MaHoaDon}
+              className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between hover:border-primary/30 transition cursor-pointer"
+              onClick={() =>
+                (window.location.href = `/invoices/${i.MaHD || i.MaHoaDon}`)
+              }
             >
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-orange-50 rounded-xl text-orange-500">
@@ -157,7 +261,7 @@ export const History: React.FC = () => {
                 </div>
                 <div>
                   <div className="font-bold text-gray-800">
-                    Hóa đơn #{i.MaHD}
+                    #{(i.MaHD || i.MaHoaDon || "").slice(0, 8)}
                   </div>
                   <div className="text-sm text-gray-500 flex items-center mt-1">
                     <CalendarDays className="w-3 h-3 mr-1" />
@@ -166,11 +270,17 @@ export const History: React.FC = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-bold text-xl text-primary">
+                <div className="font-bold text-lg text-primary">
                   {Number(i.TongTien).toLocaleString()} đ
                 </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {i.HinhThucThanhToan}
+                <div
+                  className={`text-[10px] font-bold mt-1 ${
+                    i.TrangThai === "PAID"
+                      ? "text-green-600"
+                      : "text-yellow-600"
+                  }`}
+                >
+                  {i.TrangThai === "PAID" ? "ĐÃ THANH TOÁN" : "CHƯA THANH TOÁN"}
                 </div>
               </div>
             </div>

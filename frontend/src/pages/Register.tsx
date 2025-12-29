@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Calendar,
 } from "lucide-react";
-// FIX 1: Import API thay vì db trực tiếp
 import { authApi } from "../api/authApi";
 import { SuccessModal } from "../components/ui/SuccessModal";
 import { ErrorModal } from "../components/ui/ErrorModal";
@@ -25,35 +24,23 @@ export const Register: React.FC = () => {
   } = useForm<any>();
   const navigate = useNavigate();
 
-  // FIX 2: Khai báo đầy đủ các State
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const onSubmit = async (d: any) => {
-    setIsLoading(true); // Bắt đầu loading
+    setIsLoading(true);
     try {
-      // FIX 3: Gọi qua API chuẩn (đã bao gồm delay giả lập)
-      await authApi.register({
-        HoTen: d.HoTen,
-        Email: d.Email,
-        SDT: d.SDT,
-        MatKhau: d.password,
-        CCCD: d.CCCD,
-        NgaySinh: d.NgaySinh,
-        GioiTinh: d.GioiTinh,
-        Role: "CUSTOMER", // Mặc định là khách hàng
-      });
+      await authApi.register(d);
 
-      // Thành công -> Bật Modal xanh
       setShowSuccess(true);
     } catch (e: any) {
-      // Thất bại -> Bật Modal đỏ
-      setErrorMsg(e.message || "Đăng ký thất bại");
+      const msg = e.response?.data?.message || "Đăng ký thất bại";
+      setErrorMsg(msg);
       setShowError(true);
     } finally {
-      setIsLoading(false); // Tắt loading dù thành công hay thất bại
+      setIsLoading(false);
     }
   };
 
